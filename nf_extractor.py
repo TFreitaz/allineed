@@ -1,5 +1,6 @@
 import re
 from decimal import Decimal
+from datetime import datetime
 
 import requests
 from bs4 import BeautifulSoup
@@ -41,17 +42,22 @@ class NFCeParser:
             if line.strip()
         ]
 
+    # ------------------------------------------------------------------
+    # Products
+    # ------------------------------------------------------------------
+
     @staticmethod
     def find_products_start(lines: list[str]) -> int:
-        marker = "DOCUMENTO AUXILIAR DA NOTA FISCAL DE CONSUMIDOR ELETRÔNICA"
+        marker = (
+            "DOCUMENTO AUXILIAR DA NOTA FISCAL "
+            "DE CONSUMIDOR ELETRÔNICA"
+        )
 
         return lines.index(marker) + 1
 
     @staticmethod
     def find_products_end(lines: list[str]) -> int:
-        marker = "Qtd. total de itens:"
-
-        return lines.index(marker)
+        return lines.index("Qtd. total de itens:")
 
     @staticmethod
     def extract_products(
@@ -64,13 +70,6 @@ class NFCeParser:
         index = start
 
         while index < end:
-            # A product starts with:
-            #
-            # PRODUCT NAME
-            # (Código:
-            # 123456
-            # )
-
             if (
                 index + 3 >= end
                 or lines[index + 1] != "(Código:"
@@ -84,17 +83,6 @@ class NFCeParser:
                 "code": lines[index + 2],
             }
 
-            # Product details:
-            #
-            # Qtde.:
-            # 1
-            # UN:
-            # UN
-            # Vl. Unit.:
-            # 8,98
-            # Vl. Total
-            # 8,98
-
             details_start = index + 4
 
             if not NFCeParser._is_product_details(
@@ -107,10 +95,16 @@ class NFCeParser:
 
             product.update(
                 {
-                    "quantity": lines[details_start + 1],
+                    "quantity": NFCeParser._parse_decimal(
+                        lines[details_start + 1]
+                    ),
                     "unit": lines[details_start + 3],
-                    "unit_price": lines[details_start + 5],
-                    "total_price": lines[details_start + 7],
+                    "unit_price": NFCeParser._parse_decimal(
+                        lines[details_start + 5]
+                    ),
+                    "total_price": NFCeParser._parse_decimal(
+                        lines[details_start + 7]
+                    ),
                 }
             )
 
@@ -136,29 +130,133 @@ class NFCeParser:
             and lines[start + 6] == "Vl. Total"
         )
 
-    @staticmethod
-    def normalize_products(products: list[dict]) -> list[dict]:
-        return [
-            {
-                **product,
-                "quantity": NFCeParser._parse_decimal(
-                    product["quantity"]
-                ),
-                "unit_price": NFCeParser._parse_decimal(
-                    product["unit_price"]
-                ),
-                "total_price": NFCeParser._parse_decimal(
-                    product["total_price"]
-                ),
-            }
-            for product in products
-        ]
+    # ------------------------------------------------------------------
+    # Metadata
+    # ------------------------------------------------------------------
 
     @staticmethod
-    def _parse_decimal(value: str) -> Decimal:
-        return Decimal(
-            value.replace(".", "").replace(",", ".")
+    def extract_metadata(lines: list[str]) -> dict:
+        metadata = {
+            "store": NFCeParser._extract_store(lines),
+            "document": NFCeParser._extract_document_data(lines),
+            "totals": NFCeParser._extract_totals(lines),
+            "payment": NFCeParser._extract_payment(lines),
+        }
+
+        return metadata
+
+    @staticmethod
+    def _extract_store(lines: list[str]) -> dict:
+        cnpj_index = lines.index("CNPJ:")
+
+        return {
+            "name": lines[cnpj_index - 1],
+            "cnpj": lines[cnpj_index + 1],
+            "address": NFCeParser._extract_address(
+                lines,
+                cnpj_index,
+            ),
+        }
+
+    @staticmethod
+    def _extract_address(
+        lines: list[str],
+        cnpj_index: int,
+    ) -> dict:
+        address_lines = lines[cnpj_index + 2:]
+
+        city_index = None
+
+        for index, line in enumerate(address_lines):
+            if line == "ITUVERAVA":
+                city_index = index
+                break
+
+        if city_index is None:
+            return {}
+
+        return {
+            "street": address_lines[0],
+            "number": address_lines[2],
+            "neighborhood": address_lines[4],
+            "city": address_lines[city_index],
+            "state": address_lines[city_index + 2],
+        }
+
+    @staticmethod
+    def _extract_document_data(lines: list[str]) -> dict:
+        number_index = lines.index("Número:")
+        series_index = lines.index("Série:")
+        issue_date_index = lines.index("Emissão:")
+        protocol_index = lines.index(
+            "Protocolo de Autorização:"
         )
+        access_key_index = lines.index(
+            "Chave de acesso:"
+        )
+
+        access_key = lines[access_key_index + 1]
+        access_key = access_key.replace(" ", "")
+
+        return {
+            "number": lines[number_index + 1],
+            "series": lines[series_index + 1],
+            "issued_at": datetime.strptime(
+                lines[issue_date_index + 1],
+                "%d/%m/%Y %H:%M:%S",
+            ),
+            "authorization_protocol": (
+                lines[protocol_index + 1].split()[0]
+            ),
+            "access_key": access_key,
+        }
+
+    @staticmethod
+    def _extract_totals(lines: list[str]) -> dict:
+        total_items_index = lines.index(
+            "Qtd. total de itens:"
+        )
+        total_amount_index = lines.index(
+            "Valor total R$:"
+        )
+        discount_index = lines.index(
+            "Descontos R$:"
+        )
+        amount_to_pay_index = lines.index(
+            "Valor a pagar R$:"
+        )
+
+        return {
+            "total_items": int(
+                lines[total_items_index + 1]
+            ),
+            "total_amount": NFCeParser._parse_decimal(
+                lines[total_amount_index + 1]
+            ),
+            "discount": NFCeParser._parse_decimal(
+                lines[discount_index + 1]
+            ),
+            "amount_to_pay": NFCeParser._parse_decimal(
+                lines[amount_to_pay_index + 1]
+            ),
+        }
+
+    @staticmethod
+    def _extract_payment(lines: list[str]) -> dict:
+        payment_index = lines.index(
+            "Forma de pagamento:"
+        )
+
+        return {
+            "method": lines[payment_index + 2],
+            "amount_paid": NFCeParser._parse_decimal(
+                lines[payment_index + 3]
+            ),
+        }
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
 
     def get_products(self) -> list[dict]:
         html = self.fetch_page()
@@ -168,25 +266,38 @@ class NFCeParser:
         start = self.find_products_start(lines)
         end = self.find_products_end(lines)
 
-        products = self.extract_products(
+        return self.extract_products(
             lines,
             start,
             end,
         )
 
-        return self.normalize_products(products)
+    def get_metadata(self) -> dict:
+        html = self.fetch_page()
+        soup = self.parse_html(html)
+        lines = self.extract_lines(soup)
 
+        return self.extract_metadata(lines)
 
-if __name__ == "__main__":
-    url = (
-        "https://www.nfce.fazenda.sp.gov.br/"
-        "NFCeConsultaPublica/Paginas/ConsultaQRCode.aspx"
-        "?p=35260709418668000985651080001318481382606359|3|1"
-    )
+    def get_data(self) -> dict:
+        html = self.fetch_page()
+        soup = self.parse_html(html)
+        lines = self.extract_lines(soup)
 
-    parser = NFCeParser(url)
+        start = self.find_products_start(lines)
+        end = self.find_products_end(lines)
 
-    products = parser.get_products()
+        return {
+            "metadata": self.extract_metadata(lines),
+            "products": self.extract_products(
+                lines,
+                start,
+                end,
+            ),
+        }
 
-    for product in products:
-        print(product)
+    @staticmethod
+    def _parse_decimal(value: str) -> Decimal:
+        return Decimal(
+            value.replace(".", "").replace(",", ".")
+        )

@@ -10,6 +10,8 @@ import psycopg2
 import psycopg2.pool
 from fastapi import FastAPI, Request
 
+from msg_reader import MsgReader
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("telegram-echo-bot")
 
@@ -71,24 +73,26 @@ async def telegram_webhook(request: Request):
         return {"ok": True}
 
     chat_id = message["chat"]["id"]
-    text = message["text"]
+    input_text = message["text"]
+    msg_reader = MsgReader(input_text)
+    response_text = msg_reader.get_answer()
     from_user = message.get("from", {})
 
     if db_pool:
         try:
             # save_message é bloqueante (psycopg2), então roda numa thread separada
             # pra não travar o event loop do FastAPI.
-            user_id = await asyncio.to_thread(save_message, from_user, message, chat_id, text)
+            user_id = await asyncio.to_thread(save_message, from_user, message, chat_id, input_text)
             logger.info("Mensagem salva. user_id=%s", user_id)
         except Exception:
             logger.exception("Falha ao salvar mensagem no banco.")
 
-    await send_message(chat_id, text)
+    await send_message(chat_id, response_text)
 
     return {"ok": True}
 
 
-def save_message(from_user: dict, message: dict, chat_id: int, text: str) -> int:
+def save_message(from_user: dict, message: dict, chat_id: int, input_text: str) -> int:
     """
     Garante o usuário na tabela `users` (cria se não existir, atualiza dados
     básicos se já existir) e insere a mensagem em `messages`, relacionada a ele.
@@ -130,7 +134,7 @@ def save_message(from_user: dict, message: dict, chat_id: int, text: str) -> int
                 INSERT INTO messages (user_id, telegram_message_id, chat_id, text, sent_at)
                 VALUES (%s, %s, %s, %s, %s)
                 """,
-                (user_id, telegram_message_id, chat_id, text, sent_at),
+                (user_id, telegram_message_id, chat_id, input_text, sent_at),
             )
         conn.commit()
 
