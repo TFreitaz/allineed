@@ -38,7 +38,7 @@ class MsgReader:
 
         for product in products:
             response_lines.append(
-                f"- {product['description']} | Quantidade: {product['quantity']} | Valor Unitário: {product['unit_price']} | Valor Total: {product['total_price']}"
+                f"- {product['name']} | Quantidade: {product['quantity']} | Valor Unitário: {product['unit_price']} | Valor Total: {product['total_price']}"
             )
 
         return "\n".join(response_lines)
