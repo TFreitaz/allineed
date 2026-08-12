@@ -28,14 +28,8 @@ db_pool: Optional[psycopg2.pool.SimpleConnectionPool] = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if DATABASE_URL:
-        init_pool(DATABASE_URL)
-        logger.info("Pool de conexão com o banco iniciado.")
-    else:
-        logger.warning(
-            "DATABASE_URL não definida — "
-            "mensagens não serão salvas no banco."
-        )
+    init_pool()
+    logger.info("Pool de conexão com o banco iniciado.")
 
     yield
 
