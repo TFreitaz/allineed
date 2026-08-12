@@ -24,36 +24,6 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 
 db_pool: Optional[psycopg2.pool.SimpleConnectionPool] = None
 
-
-@app.on_event("startup")
-def startup() -> None:
-    logger.info("Starting up the application...")
-    global db_pool
-    if DATABASE_URL:
-        db_pool = psycopg2.pool.SimpleConnectionPool(1, 5, DATABASE_URL)
-        logger.info("Pool de conexão com o banco iniciado.")
-    else:
-        logger.warning("DATABASE_URL não definida — mensagens não serão salvas no banco.")
-
-
-@app.on_event("shutdown")
-def shutdown() -> None:
-    if db_pool:
-        db_pool.closeall()
-
-
-@contextmanager
-def get_db_connection():
-    logger.info("Getting a database connection from the pool...")
-    if not db_pool:
-        raise RuntimeError("Pool de conexão com o banco não inicializado (DATABASE_URL ausente).")
-    conn = db_pool.getconn()
-    try:
-        yield conn
-    finally:
-        db_pool.putconn(conn)
-
-
 @app.get("/")
 async def health():
     """Rota simples de health check (útil para o Render saber que o serviço subiu)."""
@@ -79,14 +49,8 @@ async def telegram_webhook(request: Request):
     input_text = message["text"]
     from_user = message.get("from", {})
 
-    if db_pool:
-        try:
-            # save_message é bloqueante (psycopg2), então roda numa thread separada
-            # pra não travar o event loop do FastAPI.
-            user_id, message_id = await asyncio.to_thread(save_message, from_user, message, chat_id, input_text)
-            logger.info("Mensagem salva. user_id=%s, message_id=%s", user_id, message_id)
-        except Exception:
-            logger.exception("Falha ao salvar mensagem no banco.")
+    user_id, message_id = await asyncio.to_thread(save_message, from_user, message, chat_id, input_text)
+    logger.info("Mensagem salva. user_id=%s, message_id=%s", user_id, message_id)
 
     msg_reader = MsgReader(message, user_id=user_id, message_id=message_id)
     response_text = msg_reader.get_answer()
