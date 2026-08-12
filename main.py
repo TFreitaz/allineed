@@ -11,6 +11,7 @@ import psycopg2.pool
 from fastapi import FastAPI, Request
 
 from msg_reader import MsgReader
+from db.repository import save_message
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("telegram-echo-bot")
@@ -74,72 +75,23 @@ async def telegram_webhook(request: Request):
 
     chat_id = message["chat"]["id"]
     input_text = message["text"]
-    msg_reader = MsgReader(input_text)
-    response_text = msg_reader.get_answer()
     from_user = message.get("from", {})
 
     if db_pool:
         try:
             # save_message é bloqueante (psycopg2), então roda numa thread separada
             # pra não travar o event loop do FastAPI.
-            user_id = await asyncio.to_thread(save_message, from_user, message, chat_id, input_text)
-            logger.info("Mensagem salva. user_id=%s", user_id)
+            user_id, message_id = await asyncio.to_thread(save_message, from_user, message, chat_id, input_text)
+            logger.info("Mensagem salva. user_id=%s, message_id=%s", user_id, message_id)
         except Exception:
             logger.exception("Falha ao salvar mensagem no banco.")
+
+    msg_reader = MsgReader(message, user_id=user_id, message_id=message_id)
+    response_text = msg_reader.get_answer()
 
     await send_message(chat_id, response_text)
 
     return {"ok": True}
-
-
-def save_message(from_user: dict, message: dict, chat_id: int, input_text: str) -> int:
-    """
-    Garante o usuário na tabela `users` (cria se não existir, atualiza dados
-    básicos se já existir) e insere a mensagem em `messages`, relacionada a ele.
-    Retorna o user_id interno (não o telegram_id).
-    """
-    telegram_id = from_user.get("id")
-    username = from_user.get("username")
-    first_name = from_user.get("first_name")
-    last_name = from_user.get("last_name")
-    language_code = from_user.get("language_code")
-    is_bot = from_user.get("is_bot", False)
-
-    telegram_message_id = message.get("message_id")
-    sent_at = None
-    if "date" in message:
-        sent_at = datetime.fromtimestamp(message["date"], tz=timezone.utc)
-
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO users (telegram_id, username, first_name, last_name, language_code, is_bot)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                ON CONFLICT (telegram_id) DO UPDATE SET
-                    username = EXCLUDED.username,
-                    first_name = EXCLUDED.first_name,
-                    last_name = EXCLUDED.last_name,
-                    language_code = EXCLUDED.language_code,
-                    is_bot = EXCLUDED.is_bot,
-                    updated_at = now()
-                RETURNING user_id
-                """,
-                (telegram_id, username, first_name, last_name, language_code, is_bot),
-            )
-            user_id = cur.fetchone()[0]
-
-            cur.execute(
-                """
-                INSERT INTO messages (user_id, telegram_message_id, chat_id, text, sent_at)
-                VALUES (%s, %s, %s, %s, %s)
-                """,
-                (user_id, telegram_message_id, chat_id, input_text, sent_at),
-            )
-        conn.commit()
-
-    return user_id
-
 
 async def send_message(chat_id: int, text: str) -> None:
     """Envia uma mensagem de texto para um chat específico via API do Telegram."""

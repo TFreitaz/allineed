@@ -3,20 +3,23 @@ from nf_extractor import NFCeParser
 
 
 class MsgReader:
-    def __init__(self, msg: str):
+    def __init__(self, msg: str, user_id, message_id):
         self.msg = msg
+        self.text = msg["text"]
+        self.user_id = user_id
+        self.message_id = message_id
 
     def get_answer(self) -> str:
         """
         Retorna a resposta apropriada para a mensagem recebida.
         """
-        if self.msg.startswith("/start"):
+        if self.text.startswith("/start"):
             return "Olá! Eu sou o Allineed. Me envie um link de NFC-e."
 
         return self.answer_nfe_link()
 
     def answer_nfe_link(self):
-        extractor = NFCeParser(self.msg)
+        extractor = NFCeParser(self.text)
         data = extractor.get_data()
 
         save_purchase(user_id=self.user_id, data=data, source_message_id=self.message_id)
