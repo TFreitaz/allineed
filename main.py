@@ -1,7 +1,7 @@
 import os
 import logging
 import asyncio
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Optional
 
