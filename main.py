@@ -27,6 +27,7 @@ db_pool: Optional[psycopg2.pool.SimpleConnectionPool] = None
 
 @app.on_event("startup")
 def startup() -> None:
+    logger.info("Starting up the application...")
     global db_pool
     if DATABASE_URL:
         db_pool = psycopg2.pool.SimpleConnectionPool(1, 5, DATABASE_URL)
@@ -43,6 +44,7 @@ def shutdown() -> None:
 
 @contextmanager
 def get_db_connection():
+    logger.info("Getting a database connection from the pool...")
     if not db_pool:
         raise RuntimeError("Pool de conexão com o banco não inicializado (DATABASE_URL ausente).")
     conn = db_pool.getconn()
