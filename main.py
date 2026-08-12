@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request
 
 from msg_reader import MsgReader
 from db.repository import save_message
+from db.connection import init_pool, close_pool
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("telegram-echo-bot")
@@ -23,6 +24,27 @@ TELEGRAM_API_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 db_pool: Optional[psycopg2.pool.SimpleConnectionPool] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if DATABASE_URL:
+        init_pool(DATABASE_URL)
+        logger.info("Pool de conexão com o banco iniciado.")
+    else:
+        logger.warning(
+            "DATABASE_URL não definida — "
+            "mensagens não serão salvas no banco."
+        )
+
+    yield
+
+    close_pool()
+    logger.info("Pool de conexão com o banco encerrado.")
+
+
+app = FastAPI(lifespan=lifespan)
+
 
 @app.get("/")
 async def health():
