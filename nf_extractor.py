@@ -301,3 +301,29 @@ class NFCeParser:
         return Decimal(
             value.replace(".", "").replace(",", ".")
         )
+
+
+if __name__ == "__main__":
+    from pprint import pprint
+
+    url = (
+        "https://www.nfce.fazenda.sp.gov.br/"
+        "NFCeConsultaPublica/Paginas/ConsultaQRCode.aspx"
+        "?p=35260709418668000985651080001318481382606359|3|1"
+    )
+
+    parser = NFCeParser(url)
+
+    data = parser.get_data()
+
+    print("=" * 80)
+    print("METADATA")
+    print("=" * 80)
+    pprint(data["metadata"])
+
+    print("\n" + "=" * 80)
+    print("PRODUCTS")
+    print("=" * 80)
+
+    for product in data["products"]:
+        pprint(product)

@@ -1,3 +1,4 @@
+from db.purchases import save_purchase
 from nf_extractor import NFCeParser
 
 
@@ -12,11 +13,17 @@ class MsgReader:
         if self.msg.startswith("/start"):
             return "Olá! Eu sou o Allineed. Me envie um link de NFC-e."
 
+        return self.answer_nfe_link()
+
+    def answer_nfe_link(self):
         extractor = NFCeParser(self.msg)
         data = extractor.get_data()
-        return self.format_response(data)
 
-    def format_response(self, data: dict) -> str:
+        save_purchase(user_id=self.user_id, data=data, source_message_id=self.message_id)
+
+        return self.format_nfe_link_response(data)
+
+    def format_nfe_link_response(self, data: dict) -> str:
         """
         Formata os dados extraídos da NFC-e em uma resposta legível.
         """
@@ -24,21 +31,18 @@ class MsgReader:
         products = data.get("products", [])
 
         response_lines = [
-            f"Estabelecimento: {metadata.get('store', {}).get('name', 'N/A')}",
-            f"CNPJ: {metadata.get('store', {}).get('cnpj', 'N/A')}",
-            f"Chave de Acesso: {metadata.get('access_key', 'N/A')}",
-            f"Data de Emissão: {metadata.get('issue_date', 'N/A')}",
-            f"Valor Total: {metadata.get('total_value', 'N/A')}",
-            f"Valor a Pagar: {metadata.get('amount_to_pay', 'N/A')}",
-            f"Forma de Pagamento: {metadata.get('payment_method', 'N/A')}",
-            f"Valor Pago: {metadata.get('amount_paid', 'N/A')}",
+            "Compras registradas!",
             "",
-            "Produtos:",
+            f"Loja: {metadata.get('store', {}).get('name', 'Não informada')}",
+            f"Valor Total: R$ {metadata.get('total_value', 'Não informado')}",
+            "",
+            "Produtos comprados:",
+            ""
         ]
 
         for product in products:
             response_lines.append(
-                f"- {product['name']} | Quantidade: {product['quantity']} | Valor Unitário: {product['unit_price']} | Valor Total: {product['total_price']}"
+                f"- {product['name']} ({product['quantity']} {product['unit']})"
             )
 
         return "\n".join(response_lines)
