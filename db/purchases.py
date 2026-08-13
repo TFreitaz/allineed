@@ -156,7 +156,7 @@ def _upsert_store_product(cur, store_id: int, product: dict) -> int:
         INSERT INTO store_products (store_id, code, base_name)
         VALUES (%s, %s, %s)
         ON CONFLICT (store_id, code) DO UPDATE SET
-            name = EXCLUDED.name,
+            base_name = EXCLUDED.base_name,
             updated_at = now()
         RETURNING store_product_id
         """,
