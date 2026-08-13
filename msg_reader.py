@@ -37,7 +37,7 @@ class MsgReader:
             "Compras registradas!",
             "",
             f"Loja: {metadata.get('store', {}).get('name', 'Não informada')}",
-            f"Valor Total: R$ {metadata.get('total_value', 'Não informado')}",
+            f"Valor Total: R$ {metadata.get('total_amount', 'Não informado')}",
             "",
             "Produtos comprados:",
             ""

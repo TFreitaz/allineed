@@ -153,7 +153,7 @@ def _upsert_store_product(cur, store_id: int, product: dict) -> int:
 
     cur.execute(
         """
-        INSERT INTO store_products (store_id, code, name)
+        INSERT INTO store_products (store_id, code, base_name)
         VALUES (%s, %s, %s)
         ON CONFLICT (store_id, code) DO UPDATE SET
             name = EXCLUDED.name,
