@@ -80,7 +80,7 @@ async def send_message(chat_id: int, text: str) -> None:
     async with httpx.AsyncClient() as client:
         response = await client.post(
             f"{TELEGRAM_API_URL}/sendMessage",
-            json={"chat_id": chat_id, "text": text},
+            json={"chat_id": chat_id, "text": text, "parse_mode": "HTML"},
         )
         if response.status_code != 200:
             logger.error("Falha ao enviar mensagem: %s", response.text)
