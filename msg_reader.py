@@ -1,5 +1,6 @@
 from db.purchases import save_purchase
 from nf_extractor import NFCeParser
+from stock_estimator import estimate_remaining_for_user
 
 
 class MsgReader:
@@ -16,7 +17,29 @@ class MsgReader:
         if self.text.startswith("/start"):
             return "Olá! Eu sou o Allineed. Me envie um link de NFC-e."
 
+        if self.text.startswith("/report"):
+            return self.answer_stock_estimator()
+
         return self.answer_nfe_link()
+
+    def answer_stock_estimator(self):
+        purchase_info = estimate_remaining_for_user(self.user_id)
+
+        response_lines = [
+            "Produtos frequentes:",
+            "",
+        ]
+
+        for product in purchase_info:
+            status = "provavelmente acabou" if product.likely_depleted else "ainda deve ter"
+
+            response_lines.append(f"{product.product_name}: {status}")
+            response_lines.append(
+                f"(última compra: {product.last_purchase_quantity:.0f}{product.quantity_unit} "
+                f"há {product.days_since_last_purchase:.1f} dias."
+            )
+
+        return "\n".join(response_lines)
 
     def answer_nfe_link(self):
         extractor = NFCeParser(self.text)
