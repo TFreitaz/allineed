@@ -70,9 +70,20 @@ class MsgReader:
         for product in purchase_info:
             status = f"{symbols.WARNING} baixo" if product.likely_depleted else "suficiente"
 
+            unit = product.quantity_unit
+            quantity = product.last_purchase_quantity
+
+            if unit == "g" and quantity > 1000:
+                unit = "kg"
+                quantity /= 1000
+
+            if unit == "ml" and quantity > 1000:
+                unit = "L"
+                quantity /= 1000
+
             products_lines = [
                 f"<b>{product.product_name}</b> - {status}",
-                f"Última compra: {product.last_purchase_quantity:.0f}{product.quantity_unit} "
+                f"Última compra: {quantity:g}{unit} "
                 f"há {product.days_since_last_purchase:.1f} dias",
                 ""
             ]

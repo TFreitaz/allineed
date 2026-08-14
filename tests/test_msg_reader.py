@@ -33,9 +33,6 @@ class TestStartCommand:
 class TestReportCommand:
     @patch("msg_reader.estimate_remaining_for_user")
     def test_report_with_products(self, mock_estimate):
-        # NOTE: há um bug em answer_stock_estimator (usa `estimativa` em vez de
-        # `product` dentro do loop). Este teste falhará com NameError até isso
-        # ser corrigido no código-fonte.
         mock_estimate.return_value = [
             SimpleNamespace(
                 product_name="Arroz",
@@ -70,6 +67,48 @@ class TestReportCommand:
         answer = reader.get_answer()
 
         assert "Produtos recorrentes:" in answer
+
+    @patch("msg_reader.estimate_remaining_for_user")
+    def test_report_unit_aggregation(self, mock_estimate):
+        mock_estimate.return_value = [
+            SimpleNamespace(
+                product_name="Arroz",
+                likely_depleted=True,
+                last_purchase_quantity=5000,
+                quantity_unit="g",
+                days_since_last_purchase=30.0,
+            ),
+            SimpleNamespace(
+                product_name="Feijão",
+                likely_depleted=True,
+                last_purchase_quantity=800,
+                quantity_unit="g",
+                days_since_last_purchase=30.0,
+            ),
+            SimpleNamespace(
+                product_name="Leite Integral",
+                likely_depleted=False,
+                last_purchase_quantity=2000,
+                quantity_unit="ml",
+                days_since_last_purchase=3.0,
+            ),
+            SimpleNamespace(
+                product_name="Leite Desnatado",
+                likely_depleted=False,
+                last_purchase_quantity=800,
+                quantity_unit="ml",
+                days_since_last_purchase=3.0,
+            ),
+        ]
+
+        reader = make_reader("/report")
+        answer = reader.get_answer()
+
+        mock_estimate.assert_called_once_with("user-1")
+        assert "5kg" in answer
+        assert "800g" in answer
+        assert "2L" in answer
+        assert "800ml" in answer
 
 
 class TestNfeLinkFlow:
