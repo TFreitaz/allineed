@@ -69,7 +69,7 @@ async def telegram_webhook(request: Request):
     logger.info("Mensagem salva. user_id=%s, message_id=%s", user_id, message_id)
 
     msg_reader = MsgReader(message, user_id=user_id, message_id=message_id)
-    response_text = msg_reader.get_answer()
+    response_text = await asyncio.to_thread(msg_reader.get_answer)
 
     await send_message(chat_id, response_text)
 

@@ -7,3 +7,6 @@ requests
 beautifulsoup4
 openpyxl
 pytest
+opencv-python-headless
+pyzbar
+httpx
