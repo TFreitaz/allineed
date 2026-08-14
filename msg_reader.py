@@ -86,9 +86,9 @@ class MsgReader:
 
             days_text = None
             if days < 1:
-                days_line = "hoje"
+                days_text = "hoje"
             elif days < 2:
-                days_line = "ontem"
+                days_text = "ontem"
             else:
                 f"há {product.days_since_last_purchase:.0f} dias"
 
