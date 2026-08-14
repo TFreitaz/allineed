@@ -72,6 +72,7 @@ class MsgReader:
 
             unit = product.quantity_unit
             quantity = product.last_purchase_quantity
+            days = product.days_since_last_purchase
 
             if unit == "g" and quantity > 1000:
                 unit = "kg"
@@ -83,12 +84,15 @@ class MsgReader:
 
             name_line = f"<b>{product.product_name}</b> - {status}"
 
-            last_purchase_date = (
+            days_text = None
+            if days < 1:
+                days_line = "hoje"
+            elif days < 2:
+                days_line = "ontem"
+            else:
                 f"há {product.days_since_last_purchase:.0f} dias"
-                if product.days_since_last_purchase >= 1
-                else "hoje"
-            )
-            last_purchase_line = f"Última compra: {quantity:g}{unit} {last_purchase_date}" 
+
+            last_purchase_line = f"Última compra: {quantity:g}{unit} {days_text}" 
 
             products_lines = [
                 name_line,
