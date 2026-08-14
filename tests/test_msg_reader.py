@@ -110,6 +110,56 @@ class TestReportCommand:
         assert "2L" in answer
         assert "800ml" in answer
 
+    @patch("msg_reader.estimate_remaining_for_user")
+    def test_report_unit_aggregation(self, mock_estimate):
+            mock_estimate.return_value = [
+                SimpleNamespace(
+                    product_name="Feijão",
+                    likely_depleted=True,
+                    last_purchase_quantity=1,
+                    quantity_unit="g",
+                    days_since_last_purchase=(24 - 7 - 0.01) / 24,  # Bough at 7h, asked at 23h59
+                ),
+                SimpleNamespace(
+                    product_name="Leite Integral",
+                    likely_depleted=False,
+                    last_purchase_quantity=2,
+                    quantity_unit="g",
+                    days_since_last_purchase=(24 - 7) / 24,  # Bough at 7h, asked at 0h next day
+                ),
+                SimpleNamespace(
+                    product_name="Leite Desnatado",
+                    likely_depleted=True,
+                    last_purchase_quantity=3,
+                    quantity_unit="g",
+                    days_since_last_purchase=(48 - 7 - 0.01) / 24,  # Bough at 7h, asked at 23:59 next day
+                ),
+                SimpleNamespace(
+                    product_name="Macarrão",
+                    likely_depleted=True,
+                    last_purchase_quantity=4,
+                    quantity_unit="g",
+                    days_since_last_purchase=(49 - 7) / 24,  # Bough at 7h, asked at 0h two days after
+                ),
+                SimpleNamespace(
+                    product_name="Calabresa",
+                    likely_depleted=False,
+                    last_purchase_quantity=5,
+                    quantity_unit="g",
+                    days_since_last_purchase=72 / 24,  # Asked three days after buying
+                ),
+            ]
+    
+            reader = make_reader("/report")
+            answer = reader.get_answer()
+    
+            mock_estimate.assert_called_once_with("user-1")
+            assert "1g hoje" in answer
+            assert "2g ontem" in answer
+            assert "3g ontem" in answer
+            assert "4g há 2 dias" in answer
+            assert "5g há 3 dias" in answer
+
 
 class TestNfeLinkFlow:
     @patch("msg_reader.save_purchase")

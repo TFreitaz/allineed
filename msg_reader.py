@@ -84,13 +84,15 @@ class MsgReader:
 
             name_line = f"<b>{product.product_name}</b> - {status}"
 
+            DAY_PROPORTION = (24 - 7) / 24  # The earlier one can buy and later one can ask in one day
+
             days_text = None
-            if days < 1:
+            if days < DAY_PROPORTION:
                 days_text = "hoje"
-            elif days < 2:
+            elif days < DAY_PROPORTION + 1:
                 days_text = "ontem"
             else:
-                f"há {product.days_since_last_purchase:.0f} dias"
+                days_text = f"há {product.days_since_last_purchase:.0f} dias"
 
             last_purchase_line = f"Última compra: {quantity:g}{unit} {days_text}" 
 
