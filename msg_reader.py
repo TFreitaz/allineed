@@ -26,7 +26,7 @@ class MsgReader:
         purchase_info = estimate_remaining_for_user(self.user_id)
 
         response_lines = [
-            "<b>Produtos recorrentes:</b> \U0001F6D2",
+            "\U0001F6D2 <b>Produtos recorrentes:</b>",
             "",
         ]
 
