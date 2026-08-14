@@ -81,11 +81,18 @@ class MsgReader:
                 unit = "L"
                 quantity /= 1000
 
+            name_line = f"<b>{product.product_name}</b> - {status}"
+
+            last_purchase_date = (
+                f"há {product.days_since_last_purchase:.0f} dias"
+                if product.days_since_last_purchase >= 1
+                else "hoje"
+            )
+            last_purchase_line = f"Última compra: {quantity:g}{unit} {last_purchase_date}" 
+
             products_lines = [
-                f"<b>{product.product_name}</b> - {status}",
-                f"Última compra: {quantity:g}{unit} "
-                f"há {product.days_since_last_purchase:.1f} dias",
-                ""
+                name_line,
+                last_purchase_line
             ]
 
             response_lines.extend(products_lines)
