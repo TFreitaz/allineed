@@ -1,3 +1,4 @@
+import symbols
 from db.purchases import save_purchase
 from nf_extractor import NFCeParser
 from stock_estimator import estimate_remaining_for_user
@@ -25,13 +26,16 @@ class MsgReader:
     def answer_stock_estimator(self):
         purchase_info = estimate_remaining_for_user(self.user_id)
 
+        return self.format_stock_answer(purchase_info)
+
+    def format_stock_answer(self, purchase_info):
         response_lines = [
-            "\U0001F6D2 <b>Produtos recorrentes:</b>",
+            f"{symbols.SHOPPING_CART} <b>Produtos recorrentes:</b>",
             "",
         ]
 
         for product in purchase_info:
-            status = "baixo" if product.likely_depleted else "suficiente"
+            status = f"{symbols.WARNING} baixo" if product.likely_depleted else "suficiente"
 
             products_lines = [
                 f"<b>{product.product_name}</b> - {status}",
