@@ -92,7 +92,8 @@ class MsgReader:
 
             products_lines = [
                 name_line,
-                last_purchase_line
+                last_purchase_line,
+                ""
             ]
 
             response_lines.extend(products_lines)
