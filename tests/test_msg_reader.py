@@ -59,8 +59,8 @@ class TestReportCommand:
         mock_estimate.assert_called_once_with("user-1")
         assert "Arroz" in answer
         assert "Feijão" in answer
-        assert "provavelmente acabou" in answer
-        assert "ainda deve ter" in answer
+        assert "baixo" in answer
+        assert "suficiente" in answer
 
     @patch("msg_reader.estimate_remaining_for_user")
     def test_report_with_no_products(self, mock_estimate):
@@ -69,7 +69,7 @@ class TestReportCommand:
         reader = make_reader("/report")
         answer = reader.get_answer()
 
-        assert "Produtos frequentes:" in answer
+        assert "Produtos recorrentes:" in answer
 
 
 class TestNfeLinkFlow:

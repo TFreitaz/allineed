@@ -26,18 +26,21 @@ class MsgReader:
         purchase_info = estimate_remaining_for_user(self.user_id)
 
         response_lines = [
-            "Produtos frequentes:",
+            "<b>Produtos recorrentes:</b> \U0001F6D2",
             "",
         ]
 
         for product in purchase_info:
-            status = "provavelmente acabou" if product.likely_depleted else "ainda deve ter"
+            status = "baixo" if product.likely_depleted else "suficiente"
 
-            response_lines.append(f"{product.product_name}: {status}")
-            response_lines.append(
-                f"(última compra: {product.last_purchase_quantity:.0f}{product.quantity_unit} "
-                f"há {product.days_since_last_purchase:.1f} dias."
-            )
+            products_lines = [
+                f"<b>{product.product_name}</b> - {status}",
+                f"Última compra: {product.last_purchase_quantity:.0f}{product.quantity_unit} "
+                f"há {product.days_since_last_purchase:.1f} dias",
+                ""
+            ]
+
+            response_lines.extend(products_lines)
 
         return "\n".join(response_lines)
 
