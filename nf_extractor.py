@@ -216,13 +216,16 @@ class NFCeParser:
         total_items_index = lines.index(
             "Qtd. total de itens:"
         )
+        total_amount_index = None
         if any(element == "Valor total R$:" for element in lines):
             total_amount_index = lines.index(
                 "Valor total R$:"
             )
-        discount_index = lines.index(
-            "Descontos R$:"
-        )
+        discount_index=None
+        if any(element == "Descontos R$:" for element in lines):
+            discount_index = lines.index(
+                "Descontos R$:"
+            )
         amount_to_pay_index = lines.index(
             "Valor a pagar R$:"
         )
@@ -233,10 +236,10 @@ class NFCeParser:
             ),
             "total_amount": NFCeParser._parse_decimal(
                 lines[total_amount_index + 1]
-            ),
+            ) if total_amount_index else None,
             "discount": NFCeParser._parse_decimal(
                 lines[discount_index + 1]
-            ),
+            ) if discount_index else None,
             "amount_to_pay": NFCeParser._parse_decimal(
                 lines[amount_to_pay_index + 1]
             ),
