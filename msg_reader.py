@@ -1,9 +1,14 @@
+import logging
+
 import symbols
 from db.purchases import save_purchase
 from nf_extractor import NFCeParser
 from qr_reader import read_first_qr_code
 from stock_estimator import estimate_remaining_for_user
 from telegram_files import baixar_maior_foto_sync
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("telegram-echo-bot")
 
 
 class MsgReader:
@@ -23,6 +28,7 @@ class MsgReader:
         decodificação de imagem, que bloqueariam o event loop.
         """
         if "photo" in self.msg:
+            logger.info("The message contains a photo.")
             return self.answer_qrcode_photo()
 
         if self.text is None:
@@ -43,6 +49,7 @@ class MsgReader:
         o mesmo fluxo de extração/registro usado para links de NFC-e
         recebidos por texto.
         """
+        logger.info("Reading the message photo")
         foto_bytes = baixar_maior_foto_sync(self.msg)
         if foto_bytes is None:
             return "Não consegui baixar essa foto, pode tentar enviar de novo?"

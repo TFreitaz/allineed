@@ -55,14 +55,18 @@ def extrair_file_id_da_maior_foto(message: dict) -> str | None:
     de tamanhos (do menor pro maior). Pegamos o último (maior resolução).
     Retorna None se a mensagem não tiver foto.
     """
+    logger.info("Finding the largest image's ID.")
     fotos = message.get("photo")
     if not fotos:
+        logger.info("There are no value for 'photo' field in message.")
         return None
+    logger.info("Found picture.")
     return fotos[-1]["file_id"]
 
 
 async def baixar_maior_foto(message: dict) -> bytes | None:
     """Atalho assíncrono: extrai o file_id da maior foto e já baixa os bytes."""
+    logger.info("Downloading the largest image.")
     file_id = extrair_file_id_da_maior_foto(message)
     if file_id is None:
         return None

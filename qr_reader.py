@@ -135,6 +135,7 @@ def read_qr_code(
         Lista com o texto/link decodificado de cada QR code encontrado.
         Vazia se nenhum for encontrado (e levantar_se_vazio=False).
     """
+    logger.info("Loading image as array")
     array_bgr = _carregar_como_array(imagem)
 
     resultados = _tentar_opencv(array_bgr)
@@ -161,6 +162,7 @@ def read_first_qr_code(imagem: ImagemEntrada) -> str | None:
     Atalho para quando você só quer o primeiro link/conteúdo encontrado.
     Retorna None se nada for encontrado.
     """
+    logger.info("Reading QR Code from image.")
     resultados = read_qr_code(imagem)
     return resultados[0] if resultados else None
 
