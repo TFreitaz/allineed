@@ -7,11 +7,14 @@ por um usuário do Telegram, a partir do `file_id` presente no update.
 
 import os
 import httpx
+import logging
 
 TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
 TELEGRAM_API_BASE = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
 TELEGRAM_FILE_BASE = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}"
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("telegram-echo-bot")
 
 async def baixar_arquivo_por_file_id(file_id: str) -> bytes:
     """
