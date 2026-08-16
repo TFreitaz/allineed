@@ -23,6 +23,7 @@ Uso básico:
 from __future__ import annotations
 
 import io
+import logging
 from pathlib import Path
 from typing import List, Union
 
@@ -41,6 +42,8 @@ try:
 except Exception:
     _PIL_DISPONIVEL = False
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("telegram-echo-bot")
 
 ImagemEntrada = Union[str, Path, bytes, bytearray, np.ndarray]
 
