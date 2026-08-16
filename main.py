@@ -62,7 +62,10 @@ async def telegram_webhook(request: Request):
         return {"ok": True}
 
     chat_id = message["chat"]["id"]
-    input_text = message["text"]
+    if "text" in message:
+        input_text = message["text"]
+    else:
+        input_text = ""
     from_user = message.get("from", {})
 
     user_id, message_id = await asyncio.to_thread(save_message, from_user, message, chat_id, input_text)
