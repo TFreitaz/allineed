@@ -57,7 +57,7 @@ async def telegram_webhook(request: Request):
     logger.info("Update recebido: %s", update)
 
     message = update.get("message")
-    if not message or "text" not in message:
+    if not message:
         # Ignora updates que não são mensagens de texto (fotos, stickers, etc.)
         return {"ok": True}
 
