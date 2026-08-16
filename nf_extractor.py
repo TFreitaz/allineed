@@ -216,9 +216,10 @@ class NFCeParser:
         total_items_index = lines.index(
             "Qtd. total de itens:"
         )
-        total_amount_index = lines.index(
-            "Valor total R$:"
-        )
+        if any(element == "Valor total R$:" for element in lines):
+            total_amount_index = lines.index(
+                "Valor total R$:"
+            )
         discount_index = lines.index(
             "Descontos R$:"
         )
