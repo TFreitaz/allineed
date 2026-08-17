@@ -79,6 +79,13 @@ class TestReportCommand:
                 days_since_last_purchase=30.0,
             ),
             SimpleNamespace(
+                product_name="Batata",
+                likely_depleted=True,
+                last_purchase_quantity=1000,
+                quantity_unit="g",
+                days_since_last_purchase=30.0,
+            ),
+            SimpleNamespace(
                 product_name="Feijão",
                 likely_depleted=True,
                 last_purchase_quantity=800,
@@ -89,6 +96,13 @@ class TestReportCommand:
                 product_name="Leite Integral",
                 likely_depleted=False,
                 last_purchase_quantity=2000,
+                quantity_unit="ml",
+                days_since_last_purchase=3.0,
+            ),
+            SimpleNamespace(
+                product_name="Leite Zero Lactose",
+                likely_depleted=False,
+                last_purchase_quantity=1000,
                 quantity_unit="ml",
                 days_since_last_purchase=3.0,
             ),
@@ -106,8 +120,10 @@ class TestReportCommand:
 
         mock_estimate.assert_called_once_with("user-1")
         assert "5kg" in answer
+        assert "1kg" in answer
         assert "800g" in answer
         assert "2L" in answer
+        assert "1L" in answer
         assert "800ml" in answer
 
     @patch("msg_reader.estimate_remaining_for_user")

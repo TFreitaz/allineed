@@ -81,11 +81,11 @@ class MsgReader:
             quantity = product.last_purchase_quantity
             days = product.days_since_last_purchase
 
-            if unit == "g" and quantity > 1000:
+            if unit == "g" and quantity >= 1000:
                 unit = "kg"
                 quantity /= 1000
 
-            if unit == "ml" and quantity > 1000:
+            if unit == "ml" and quantity >= 1000:
                 unit = "L"
                 quantity /= 1000
 
