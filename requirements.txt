@@ -10,3 +10,4 @@ pytest
 opencv-python-headless
 pyzbar
 httpx
+PyMuPDF

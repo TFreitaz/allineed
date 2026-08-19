@@ -1,8 +1,10 @@
 import logging
+from urllib.parse import parse_qs, urlparse
 
 import symbols
 from db.purchases import save_purchase
-from nf_extractor import NFCeParser
+from nf_extractor.nf_html_extractor import NFCeHtmlParser
+from nf_extractor.nf_pdf_extractor import NFCePdfParser
 from qr_reader import read_first_qr_code
 from stock_estimator import estimate_remaining_for_user
 from telegram_files import baixar_maior_foto_sync
@@ -31,6 +33,11 @@ class MsgReader:
             logger.info("The message contains a photo.")
             return self.answer_qrcode_photo()
 
+        
+        document = self.msg.get("document")
+        if document and document.mime_type == "application/pdf":
+            return self.answer_pdf(document)
+
         if self.text is None:
             return "Não entendi essa mensagem. Me envie um link de NFC-e ou uma foto do QR code da nota."
 
@@ -40,7 +47,77 @@ class MsgReader:
         if self.text.startswith("/report"):
             return self.answer_stock_estimator()
 
-        return self.answer_nfe_link()
+        if self._is_nfe_url(self.text):
+            return self.answer_nfe_link()
+
+        return "Não entendi essa mensagem. Me envie um link de NFC-e ou uma foto do QR code da nota."
+
+    def _is_nfe_url(self, text: str) -> bool:
+        try:
+            url = urlparse(text.strip())
+
+            if url.scheme not in ("http", "https"):
+                return False
+
+            if url.netloc.lower() not in {
+                "www.nfce.fazenda.sp.gov.br",
+                "nfce.fazenda.sp.gov.br",
+            }:
+                return False
+
+            path = url.path.lower()
+
+            if path not in {
+                "/qrcode",
+                "/nfce/qrcode",
+                "/nfceconsultapublica/paginas/consultaqrcode.aspx",
+            }:
+                return False
+
+            params = parse_qs(url.query)
+
+            qr_code = params.get("p")
+
+            if not qr_code or len(qr_code) != 1:
+                return False
+
+            parts = qr_code[0].split("|")
+
+            if len(parts) < 3:
+                return False
+
+            access_key = parts[0]
+
+            # A chave de acesso da NFC-e possui 44 dígitos.
+            if not access_key.isdigit() or len(access_key) != 44:
+                return False
+
+            # Versão do QR Code
+            if parts[1] not in {"2", "3"}:
+                return False
+
+            # Ambiente:
+            # 1 = produção
+            # 2 = homologação
+            if parts[2] not in {"1", "2"}:
+                return False
+
+            return True
+
+        except (ValueError, AttributeError):
+            return False
+
+    def answer_pdf(self, pdf):
+        telegram_file = pdf.get_file()
+        
+        pdf_bytes = telegram_file.download_as_bytearray()
+
+        extractor = NFCePdfParser(pdf_bytes)
+        data = extractor.get_data()
+
+        save_purchase(user_id=self.user_id, data=data, source_message_id=self.message_id)
+
+        return self.format_nfe_link_response(data)
 
     def answer_qrcode_photo(self) -> str:
         """
@@ -122,8 +199,18 @@ class MsgReader:
         seja diretamente do texto ou decodificado do QR code), faz o parse,
         salva a compra e formata a resposta.
         """
-        extractor = NFCeParser(link)
+        extractor = NFCeHtmlParser(link)
         data = extractor.get_data()
+
+        if not data:
+            return (
+                "Parece que o extrato não está acessível.\n\n"
+                "Talvez você tenha cadastrado seu CPF/CNPJ. "
+                "Isso me impede de encontrá-lo.\n\n"
+                "Acesse o link que você me enviou, digite a "
+                "chave de segurança que está na Nota Fiscal, "
+                "baixe o PDF da compra e me envie."
+            )
 
         save_purchase(user_id=self.user_id, data=data, source_message_id=self.message_id)
 

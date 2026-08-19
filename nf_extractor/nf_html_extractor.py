@@ -6,11 +6,11 @@ import requests
 from bs4 import BeautifulSoup
 
 
-class NFCeParser:
+class NFCeHtmlParser:
     def __init__(self, url: str):
         self.url = url
 
-    def fetch_page(self) -> str:
+    def fetch_page(self) -> tuple[str, str]:
         response = requests.get(
             self.url,
             headers=self._get_headers(),
@@ -18,7 +18,7 @@ class NFCeParser:
         )
         response.raise_for_status()
 
-        return response.text
+        return response.text, response.url
 
     @staticmethod
     def _get_headers() -> dict[str, str]:
@@ -85,7 +85,7 @@ class NFCeParser:
 
             details_start = index + 4
 
-            if not NFCeParser._is_product_details(
+            if not NFCeHtmlParser._is_product_details(
                 lines,
                 details_start,
                 end,
@@ -95,14 +95,14 @@ class NFCeParser:
 
             product.update(
                 {
-                    "quantity": NFCeParser._parse_decimal(
+                    "quantity": NFCeHtmlParser._parse_decimal(
                         lines[details_start + 1]
                     ),
                     "unit": lines[details_start + 3],
-                    "unit_price": NFCeParser._parse_decimal(
+                    "unit_price": NFCeHtmlParser._parse_decimal(
                         lines[details_start + 5]
                     ),
-                    "total_price": NFCeParser._parse_decimal(
+                    "total_price": NFCeHtmlParser._parse_decimal(
                         lines[details_start + 7]
                     ),
                 }
@@ -137,10 +137,10 @@ class NFCeParser:
     @staticmethod
     def extract_metadata(lines: list[str]) -> dict:
         metadata = {
-            "store": NFCeParser._extract_store(lines),
-            "document": NFCeParser._extract_document_data(lines),
-            "totals": NFCeParser._extract_totals(lines),
-            "payment": NFCeParser._extract_payment(lines),
+            "store": NFCeHtmlParser._extract_store(lines),
+            "document": NFCeHtmlParser._extract_document_data(lines),
+            "totals": NFCeHtmlParser._extract_totals(lines),
+            "payment": NFCeHtmlParser._extract_payment(lines),
         }
 
         return metadata
@@ -152,7 +152,7 @@ class NFCeParser:
         return {
             "name": lines[cnpj_index - 1],
             "cnpj": lines[cnpj_index + 1],
-            "address": NFCeParser._extract_address(
+            "address": NFCeHtmlParser._extract_address(
                 lines,
                 cnpj_index,
             ),
@@ -234,13 +234,13 @@ class NFCeParser:
             "total_items": int(
                 lines[total_items_index + 1]
             ),
-            "total_amount": NFCeParser._parse_decimal(
+            "total_amount": NFCeHtmlParser._parse_decimal(
                 lines[total_amount_index + 1]
             ) if total_amount_index else None,
-            "discount": NFCeParser._parse_decimal(
+            "discount": NFCeHtmlParser._parse_decimal(
                 lines[discount_index + 1]
             ) if discount_index else None,
-            "amount_to_pay": NFCeParser._parse_decimal(
+            "amount_to_pay": NFCeHtmlParser._parse_decimal(
                 lines[amount_to_pay_index + 1]
             ),
         }
@@ -253,7 +253,7 @@ class NFCeParser:
 
         return {
             "method": lines[payment_index + 2],
-            "amount_paid": NFCeParser._parse_decimal(
+            "amount_paid": NFCeHtmlParser._parse_decimal(
                 lines[payment_index + 3]
             ),
         }
@@ -284,7 +284,16 @@ class NFCeParser:
         return self.extract_metadata(lines)
 
     def get_data(self) -> dict:
-        html = self.fetch_page()
+        html, final_url = self.fetch_page()
+
+        if (
+            final_url.startswith(
+                "https://www.nfce.fazenda.sp.gov.br/"
+                "NFCeConsultaPublica/Paginas/ConsultaPublica.aspx"
+            )
+        ):
+            return
+
         soup = self.parse_html(html)
         lines = self.extract_lines(soup)
 

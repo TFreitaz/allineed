@@ -2,7 +2,7 @@
 Acesso a dados para o fluxo de NFC-e: lojas, produtos por loja, compras e itens
 de compra (schema criado em db/migrations/0002_create_stores_and_purchases.sql).
 
-Formato esperado de `data` (retorno de NFCeParser.get_data()):
+Formato esperado de `data` (retorno de NFCeHtmlParser.get_data()):
 
     {
         "metadata": {
