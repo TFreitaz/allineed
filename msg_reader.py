@@ -8,6 +8,10 @@ from nf_extractor.nf_pdf_extractor import NFCePdfParser
 from qr_reader import read_first_qr_code
 from stock_estimator import estimate_remaining_for_user
 from telegram_files import baixar_maior_foto_sync
+from telegram_files import (
+    baixar_maior_foto_sync,
+    download_document_sync,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("telegram-echo-bot")
@@ -67,11 +71,7 @@ class MsgReader:
         )
 
         if document is not None:
-            mime_type = getattr(
-                document,
-                "mime_type",
-                None,
-            )
+            mime_type = document.get("mime_type")
 
             logger.info(
                 "Document detected: mime_type=%s",
@@ -91,7 +91,7 @@ class MsgReader:
                     "Routing to PDF parser."
                 )
 
-                return self.answer_pdf(document)
+                return self.answer_pdf()
 
             logger.info(
                 "Document is not a PDF. "
@@ -239,15 +239,29 @@ class MsgReader:
         except (ValueError, AttributeError):
             return False
 
-    def answer_pdf(self, pdf):
-        telegram_file = pdf.get_file()
-        
-        pdf_bytes = telegram_file.download_as_bytearray()
+    def answer_pdf(self):
+        pdf_bytes = download_document_sync(self.msg)
+
+        if pdf_bytes is None:
+            logger.warning("Could not download PDF document.")
+            return (
+                "Não consegui baixar esse PDF. "
+                "Pode tentar enviá-lo novamente?"
+            )
+
+        logger.info(
+            "PDF downloaded successfully: %d bytes",
+            len(pdf_bytes),
+        )
 
         extractor = NFCePdfParser(pdf_bytes)
         data = extractor.get_data()
 
-        save_purchase(user_id=self.user_id, data=data, source_message_id=self.message_id)
+        save_purchase(
+            user_id=self.user_id,
+            data=data,
+            source_message_id=self.message_id,
+        )
 
         return self.format_nfe_link_response(data)
 

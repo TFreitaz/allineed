@@ -16,6 +16,62 @@ TELEGRAM_FILE_BASE = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("telegram-echo-bot")
 
+def extract_document_file_id(message: dict) -> str | None:
+    """
+    Extracts the file_id from a Telegram document message.
+
+    Returns None if the message does not contain a document.
+    """
+    logger.info("Finding document file ID.")
+
+    document = message.get("document")
+
+    if not document:
+        logger.info("There is no value for 'document' field in message.")
+        return None
+
+    file_id = document.get("file_id")
+
+    if not file_id:
+        logger.info("Document does not contain a file_id.")
+        return None
+
+    logger.info("Found document.")
+    return file_id
+
+
+async def download_document(message: dict) -> bytes | None:
+    """
+    Downloads a document sent by the user and returns its raw bytes.
+
+    Returns None if the message does not contain a valid document.
+    """
+    logger.info("Downloading document.")
+
+    file_id = extract_document_file_id(message)
+
+    if file_id is None:
+        return None
+
+    return await baixar_arquivo_por_file_id(file_id)
+
+
+def download_document_sync(message: dict) -> bytes | None:
+    """
+    Synchronous version of download_document.
+
+    Used by MsgReader, which is synchronous by design and runs outside
+    the main event loop.
+    """
+    logger.info("Downloading document synchronously.")
+
+    file_id = extract_document_file_id(message)
+
+    if file_id is None:
+        return None
+
+    return baixar_arquivo_por_file_id_sync(file_id)
+
 async def baixar_arquivo_por_file_id(file_id: str) -> bytes:
     """
     Recebe um file_id do Telegram e retorna os bytes brutos do arquivo.

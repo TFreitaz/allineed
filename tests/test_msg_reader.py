@@ -339,16 +339,18 @@ class TestPhotoFlow:
 
 class TestPdfFlow:
     def make_pdf_document(self):
-        return SimpleNamespace(
-            mime_type="application/pdf",
-        )
+        return {
+            "mime_type": "application/pdf",
+        }
 
     @patch("msg_reader.MsgReader.answer_pdf")
     def test_pdf_document_is_routed_to_pdf_handler(
         self,
         mock_answer_pdf,
     ):
-        document = self.make_pdf_document()
+        document = {
+            "mime_type": "application/pdf",
+        }
 
         mock_answer_pdf.return_value = "PDF processado!"
 
@@ -360,7 +362,7 @@ class TestPdfFlow:
 
         answer = reader.get_answer()
 
-        mock_answer_pdf.assert_called_once_with(document)
+        mock_answer_pdf.assert_called_once_with()
 
         assert answer == "PDF processado!"
 
@@ -372,6 +374,10 @@ class TestPdfFlow:
         document = SimpleNamespace(
             mime_type="application/zip",
         )
+
+        document = {
+            "mime_type": "application/zip",
+        }
 
         reader = make_reader(
             {
@@ -413,19 +419,17 @@ class TestPdfFlow:
 
     @patch("msg_reader.save_purchase")
     @patch("msg_reader.NFCePdfParser")
+    @patch("msg_reader.download_document_sync")
     def test_pdf_is_parsed_saved_and_formatted(
         self,
+        mock_download,
         mock_parser_cls,
         mock_save_purchase,
     ):
         fake_data = {
             "metadata": {
-                "store": {
-                    "name": "Mercado PDF",
-                },
-                "totals": {
-                    "amount_to_pay": "55,90",
-                },
+                "store": {"name": "Mercado PDF"},
+                "totals": {"amount_to_pay": "55,90"},
             },
             "products": [
                 {
@@ -436,29 +440,27 @@ class TestPdfFlow:
             ],
         }
 
+        pdf_bytes = b"fake-pdf"
+        mock_download.return_value = pdf_bytes
+
         mock_parser = MagicMock()
         mock_parser.get_data.return_value = fake_data
         mock_parser_cls.return_value = mock_parser
 
-        pdf_bytes = bytearray(b"fake-pdf")
+        document = {
+            "file_id": "file-123",
+            "file_name": "nota.pdf",
+            "mime_type": "application/pdf",
+        }
 
-        telegram_file = MagicMock()
-        telegram_file.download_as_bytearray.return_value = pdf_bytes
-
-        document = MagicMock()
-        document.mime_type = "application/pdf"
-        document.get_file.return_value = telegram_file
-
-        reader = make_reader(
-            {
-                "document": document,
-            }
-        )
+        reader = make_reader({
+            "document": document,
+        })
 
         answer = reader.get_answer()
 
+        mock_download.assert_called_once_with(reader.msg)
         mock_parser_cls.assert_called_once_with(pdf_bytes)
-
         mock_parser.get_data.assert_called_once()
 
         mock_save_purchase.assert_called_once_with(
@@ -472,15 +474,32 @@ class TestPdfFlow:
         assert "55,90" in answer
         assert "Leite" in answer
 
+    @patch("msg_reader.save_purchase")
     @patch("msg_reader.NFCePdfParser")
+    @patch("msg_reader.download_document_sync")
     def test_pdf_downloads_document_content(
         self,
+        mock_download,
         mock_parser_cls,
+        mock_save_purchase,
     ):
+        pdf_bytes = b"pdf-content"
+
+        mock_download.return_value = pdf_bytes
+
         fake_data = {
             "metadata": {
-                "store": {"name": "Mercado"},
-                "totals": {"amount_to_pay": "10,00"},
+                "store": {
+                    "name": "Mercado",
+                },
+                "document": {
+                    "access_key": (
+                        "35260809418668000985651100001419741598860218"
+                    ),
+                },
+                "totals": {
+                    "amount_to_pay": "10,00",
+                },
             },
             "products": [],
         }
@@ -489,38 +508,59 @@ class TestPdfFlow:
         mock_parser.get_data.return_value = fake_data
         mock_parser_cls.return_value = mock_parser
 
-        pdf_bytes = bytearray(b"pdf-content")
+        document = {
+            "file_id": "file-123",
+            "file_name": "nota.pdf",
+            "mime_type": "application/pdf",
+        }
 
-        telegram_file = MagicMock()
-        telegram_file.download_as_bytearray.return_value = pdf_bytes
+        reader = make_reader({
+            "document": document,
+        })
 
-        document = MagicMock()
-        document.get_file.return_value = telegram_file
+        reader.answer_pdf()
 
-        reader = make_text_reader("qualquer texto")
-
-        with patch("msg_reader.save_purchase"):
-            reader.answer_pdf(document)
-
-        document.get_file.assert_called_once()
-
-        telegram_file.download_as_bytearray.assert_called_once()
+        mock_download.assert_called_once_with(
+            reader.msg
+        )
 
         mock_parser_cls.assert_called_once_with(
             pdf_bytes
         )
 
+        mock_parser.get_data.assert_called_once()
+
+        mock_save_purchase.assert_called_once_with(
+            user_id="user-1",
+            data=fake_data,
+            source_message_id="msg-1",
+        )
+
     @patch("msg_reader.save_purchase")
     @patch("msg_reader.NFCePdfParser")
+    @patch("msg_reader.download_document_sync")
     def test_pdf_uses_same_source_message_id(
         self,
+        mock_download,
         mock_parser_cls,
         mock_save_purchase,
     ):
+        pdf_bytes = b"pdf-content"
+        mock_download.return_value = pdf_bytes
+
         fake_data = {
             "metadata": {
-                "store": {"name": "Mercado"},
-                "totals": {"amount_to_pay": "10,00"},
+                "store": {
+                    "name": "Mercado",
+                },
+                "document": {
+                    "access_key": (
+                        "35260809418668000985651100001419741598860218"
+                    ),
+                },
+                "totals": {
+                    "amount_to_pay": "10,00",
+                },
             },
             "products": [],
         }
@@ -529,21 +569,29 @@ class TestPdfFlow:
         mock_parser.get_data.return_value = fake_data
         mock_parser_cls.return_value = mock_parser
 
-        pdf_bytes = bytearray(b"pdf")
-
-        telegram_file = MagicMock()
-        telegram_file.download_as_bytearray.return_value = pdf_bytes
-
-        document = MagicMock()
-        document.get_file.return_value = telegram_file
+        document = {
+            "file_id": "file-123",
+            "file_name": "nota.pdf",
+            "mime_type": "application/pdf",
+        }
 
         reader = make_reader(
-            {"document": document},
+            {
+                "document": document,
+            },
             user_id="user-99",
             message_id="message-123",
         )
 
-        reader.answer_pdf(document)
+        reader.answer_pdf()
+
+        mock_download.assert_called_once_with(
+            reader.msg
+        )
+
+        mock_parser_cls.assert_called_once_with(
+            pdf_bytes
+        )
 
         mock_save_purchase.assert_called_once_with(
             user_id="user-99",
