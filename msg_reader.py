@@ -29,28 +29,160 @@ class MsgReader:
         (asyncio.to_thread), já que o caminho de fotos faz I/O de rede e
         decodificação de imagem, que bloqueariam o event loop.
         """
-        if "photo" in self.msg:
-            logger.info("The message contains a photo.")
+        logger.info(
+            "Processing message: user_id=%s, message_id=%s, keys=%s",
+            self.user_id,
+            self.message_id,
+            list(self.msg.keys()),
+        )
+
+        # ------------------------------------------------------------------
+        # Photo
+        # ------------------------------------------------------------------
+
+        has_photo = "photo" in self.msg
+
+        logger.info(
+            "Photo check: present=%s",
+            has_photo,
+        )
+
+        if has_photo:
+            logger.info(
+                "Message identified as photo. "
+                "Routing to QR code reader."
+            )
+
             return self.answer_qrcode_photo()
 
-        
+        # ------------------------------------------------------------------
+        # Document
+        # ------------------------------------------------------------------
+
         document = self.msg.get("document")
-        if document and document.mime_type == "application/pdf":
-            return self.answer_pdf(document)
+
+        logger.info(
+            "Document check: present=%s",
+            document is not None,
+        )
+
+        if document is not None:
+            mime_type = getattr(
+                document,
+                "mime_type",
+                None,
+            )
+
+            logger.info(
+                "Document detected: mime_type=%s",
+                mime_type,
+            )
+
+            is_pdf = mime_type == "application/pdf"
+
+            logger.info(
+                "PDF check: is_pdf=%s",
+                is_pdf,
+            )
+
+            if is_pdf:
+                logger.info(
+                    "Message identified as PDF. "
+                    "Routing to PDF parser."
+                )
+
+                return self.answer_pdf(document)
+
+            logger.info(
+                "Document is not a PDF. "
+                "Continuing message checks."
+            )
+
+        # ------------------------------------------------------------------
+        # Text
+        # ------------------------------------------------------------------
+
+        logger.info(
+            "Text check: present=%s",
+            self.text is not None,
+        )
 
         if self.text is None:
-            return "Não entendi essa mensagem. Me envie um link de NFC-e ou uma foto do QR code da nota."
+            logger.info(
+                "Message has no text and was not recognized "
+                "as a supported photo or PDF."
+            )
 
-        if self.text.startswith("/start"):
-            return "Olá! Eu sou o Allineed. Me envie um link de NFC-e."
+            return (
+                "Não entendi essa mensagem. "
+                "Me envie um link de NFC-e ou uma foto "
+                "do QR code da nota."
+            )
 
-        if self.text.startswith("/report"):
+        logger.info(
+            "Text message received: length=%d",
+            len(self.text),
+        )
+
+        # ------------------------------------------------------------------
+        # Commands
+        # ------------------------------------------------------------------
+
+        is_start = self.text.startswith("/start")
+
+        logger.info(
+            "Start command check: matched=%s",
+            is_start,
+        )
+
+        if is_start:
+            return (
+                "Olá! Eu sou o Allineed. "
+                "Me envie um link de NFC-e."
+            )
+
+        is_report = self.text.startswith("/report")
+
+        logger.info(
+            "Report command check: matched=%s",
+            is_report,
+        )
+
+        if is_report:
             return self.answer_stock_estimator()
 
-        if self._is_nfe_url(self.text):
+        # ------------------------------------------------------------------
+        # NFC-e URL
+        # ------------------------------------------------------------------
+
+        is_nfe_url = self._is_nfe_url(self.text)
+
+        logger.info(
+            "NFC-e URL check: matched=%s",
+            is_nfe_url,
+        )
+
+        if is_nfe_url:
+            logger.info(
+                "Message identified as NFC-e URL. "
+                "Routing to HTML parser."
+            )
+
             return self.answer_nfe_link()
 
-        return "Não entendi essa mensagem. Me envie um link de NFC-e ou uma foto do QR code da nota."
+        # ------------------------------------------------------------------
+        # Unknown message
+        # ------------------------------------------------------------------
+
+        logger.info(
+            "Message type not recognized."
+        )
+
+        return (
+            "Não entendi essa mensagem. "
+            "Me envie um link de NFC-e ou uma foto "
+            "do QR code da nota."
+        )
 
     def _is_nfe_url(self, text: str) -> bool:
         try:
