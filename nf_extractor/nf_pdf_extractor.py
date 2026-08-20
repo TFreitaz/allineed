@@ -356,60 +356,162 @@ class NFCePdfParser:
     @staticmethod
     def extract_payment(page: fitz.Page) -> dict:
         """
-        Extracts payment information from the payment section.
+        Extracts payment method and paid amount from the payment section.
+
+        The PDF contains two columns:
+
+            Forma de pagamento:        Valor pago R$:
+            Dinheiro                   112,72
+            Troco                      NaN
+
+        Therefore, payment method and amount are extracted independently
+        based on their horizontal position.
         """
 
         words = page.get_text("words")
-        lines = NFCePdfParser._group_words_by_line(words)
 
-        payment_line_index = None
+        payment_label = None
+        amount_label = None
 
-        for index, line in enumerate(lines):
-            line_text = " ".join(
-                word["text"]
-                for word in line
-            )
+        for word in words:
+            x0, y0, x1, y1, text, *_ = word
 
-            if line_text == "Forma de pagamento:":
-                payment_line_index = index
-                break
+            if text == "pagamento:":
+                # "Forma de pagamento:" is composed of three words.
+                previous_words = [
+                    candidate
+                    for candidate in words
+                    if (
+                        abs(candidate[1] - y0) <= 2
+                        and candidate[0] < x0
+                    )
+                ]
 
-        if payment_line_index is None:
+                previous_words.sort(
+                    key=lambda candidate: candidate[0]
+                )
+
+                previous_text = " ".join(
+                    candidate[4]
+                    for candidate in previous_words[-2:]
+                )
+
+                if previous_text == "Forma de":
+                    payment_label = word
+
+            elif text == "R$:":
+                previous_words = [
+                    candidate
+                    for candidate in words
+                    if (
+                        abs(candidate[1] - y0) <= 2
+                        and candidate[0] < x0
+                    )
+                ]
+
+                previous_words.sort(
+                    key=lambda candidate: candidate[0]
+                )
+
+                previous_text = " ".join(
+                    candidate[4]
+                    for candidate in previous_words[-2:]
+                )
+
+                if previous_text == "Valor pago":
+                    amount_label = word
+
+        if payment_label is None:
             raise ValueError(
                 "Forma de pagamento não encontrada."
             )
 
-        if payment_line_index + 1 >= len(lines):
+        if amount_label is None:
+            raise ValueError(
+                "Valor pago não encontrado."
+            )
+
+        # --------------------------------------------------------------
+        # Payment method
+        # --------------------------------------------------------------
+
+        method_candidates = []
+
+        for word in words:
+            x0, y0, x1, y1, text, *_ = word
+
+            if y0 <= payment_label[3]:
+                continue
+
+            # The payment method is directly below the label.
+            if y0 - payment_label[3] > 15:
+                continue
+
+            # Keep it in the same column.
+            if x1 > payment_label[2] + 5:
+                continue
+
+            if NFCePdfParser._is_decimal(text):
+                continue
+
+            if text == "Troco":
+                continue
+
+            method_candidates.append(word)
+
+        if not method_candidates:
             raise ValueError(
                 "Método de pagamento não encontrado."
             )
 
-        payment_line = lines[payment_line_index + 1]
-
-        method = " ".join(
-            word["text"]
-            for word in payment_line
+        method_candidates.sort(
+            key=lambda word: (
+                word[1],
+                word[0],
+            )
         )
 
-        amount_paid = None
+        method = method_candidates[0][4]
 
-        # The amount paid appears in the next numeric block.
-        for index in range(
-            payment_line_index + 2,
-            min(payment_line_index + 4, len(lines)),
-        ):
-            line = lines[index]
+        # --------------------------------------------------------------
+        # Amount paid
+        # --------------------------------------------------------------
 
-            line_text = " ".join(
-                word["text"]
-                for word in line
+        amount_candidates = []
+
+        for word in words:
+            x0, y0, x1, y1, text, *_ = word
+
+            if y0 <= amount_label[3]:
+                continue
+
+            if y0 - amount_label[3] > 15:
+                continue
+
+            # Must be to the right of "Valor pago R$:"
+            if x0 < amount_label[0]:
+                continue
+
+            if not NFCePdfParser._is_decimal(text):
+                continue
+
+            amount_candidates.append(word)
+
+        if not amount_candidates:
+            raise ValueError(
+                "Valor pago não encontrado."
             )
 
-            if NFCePdfParser._is_decimal(line_text):
-                amount_paid = NFCePdfParser._parse_decimal(
-                    line_text
-                )
-                break
+        amount_candidates.sort(
+            key=lambda word: (
+                word[1],
+                word[0],
+            )
+        )
+
+        amount_paid = NFCePdfParser._parse_decimal(
+            amount_candidates[0][4]
+        )
 
         return {
             "method": method,
