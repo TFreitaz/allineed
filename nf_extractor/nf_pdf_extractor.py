@@ -261,94 +261,94 @@ class NFCePdfParser:
 
     @staticmethod
     def extract_totals(page: fitz.Page) -> dict:
-    """
-    Extracts invoice totals from the PDF text.
+        """
+        Extracts invoice totals from the PDF text.
 
-    The labels and their values are located on the same visual line,
-    for example:
+        The labels and their values are located on the same visual line,
+        for example:
 
-        Qtd. total de itens: 10
-        Valor total R$: 129,29
-        Descontos R$: 16,57
-        Valor a pagar R$: 112,72
-    """
+            Qtd. total de itens: 10
+            Valor total R$: 129,29
+            Descontos R$: 16,57
+            Valor a pagar R$: 112,72
+        """
 
-    words = page.get_text("words")
-    lines = NFCePdfParser._group_words_by_line(words)
+        words = page.get_text("words")
+        lines = NFCePdfParser._group_words_by_line(words)
 
-    patterns = {
-        "total_items": re.compile(
-            r"^Qtd\.\s*total\s*de\s*itens:\s*"
-            r"(?P<value>\d+)\s*$",
-            re.IGNORECASE,
-        ),
-        "total_amount": re.compile(
-            r"^Valor\s*total\s*R\$:\s*"
-            r"(?P<value>[\d.,]+)\s*$",
-            re.IGNORECASE,
-        ),
-        "discount": re.compile(
-            r"^Descontos\s*R\$:\s*"
-            r"(?P<value>[\d.,]+)\s*$",
-            re.IGNORECASE,
-        ),
-        "amount_to_pay": re.compile(
-            r"^Valor\s*a\s*pagar\s*R\$:\s*"
-            r"(?P<value>[\d.,]+)\s*$",
-            re.IGNORECASE,
-        ),
-    }
+        patterns = {
+            "total_items": re.compile(
+                r"^Qtd\.\s*total\s*de\s*itens:\s*"
+                r"(?P<value>\d+)\s*$",
+                re.IGNORECASE,
+            ),
+            "total_amount": re.compile(
+                r"^Valor\s*total\s*R\$:\s*"
+                r"(?P<value>[\d.,]+)\s*$",
+                re.IGNORECASE,
+            ),
+            "discount": re.compile(
+                r"^Descontos\s*R\$:\s*"
+                r"(?P<value>[\d.,]+)\s*$",
+                re.IGNORECASE,
+            ),
+            "amount_to_pay": re.compile(
+                r"^Valor\s*a\s*pagar\s*R\$:\s*"
+                r"(?P<value>[\d.,]+)\s*$",
+                re.IGNORECASE,
+            ),
+        }
 
-    values = {}
+        values = {}
 
-    for line in lines:
-        line_text = " ".join(
-            word["text"]
-            for word in line
-        )
+        for line in lines:
+            line_text = " ".join(
+                word["text"]
+                for word in line
+            )
 
-        line_text = re.sub(
-            r"\s+",
-            " ",
-            line_text,
-        ).strip()
+            line_text = re.sub(
+                r"\s+",
+                " ",
+                line_text,
+            ).strip()
 
-        for key, pattern in patterns.items():
-            match = pattern.match(line_text)
+            for key, pattern in patterns.items():
+                match = pattern.match(line_text)
 
-            if match:
-                values[key] = match.group("value")
-                break
+                if match:
+                    values[key] = match.group("value")
+                    break
 
-    required = {
-        "total_items",
-        "total_amount",
-        "discount",
-        "amount_to_pay",
-    }
+        required = {
+            "total_items",
+            "total_amount",
+            "discount",
+            "amount_to_pay",
+        }
 
-    missing = required - values.keys()
+        missing = required - values.keys()
 
-    if missing:
-        raise ValueError(
-            "Não foi possível extrair os totais: "
-            + ", ".join(sorted(missing))
-        )
+        if missing:
+            raise ValueError(
+                "Não foi possível extrair os totais: "
+                + ", ".join(sorted(missing))
+            )
 
-    return {
-        "total_items": int(
-            values["total_items"]
-        ),
-        "total_amount": NFCePdfParser._parse_decimal(
-            values["total_amount"]
-        ),
-        "discount": NFCePdfParser._parse_decimal(
-            values["discount"]
-        ),
-        "amount_to_pay": NFCePdfParser._parse_decimal(
-            values["amount_to_pay"]
-        ),
-    }
+        return {
+            "total_items": int(
+                values["total_items"]
+            ),
+            "total_amount": NFCePdfParser._parse_decimal(
+                values["total_amount"]
+            ),
+            "discount": NFCePdfParser._parse_decimal(
+                values["discount"]
+            ),
+            "amount_to_pay": NFCePdfParser._parse_decimal(
+                values["amount_to_pay"]
+            ),
+        }
     # ------------------------------------------------------------------
     # Metadata - Payment
     # ------------------------------------------------------------------
