@@ -44,7 +44,7 @@ class NFCePdfParser:
             (?P<name>.+?)
             \s*\(Código:\s*(?P<code>\d+)\s*\)
             \s*
-            Qtde\.\s*(?P<quantity>[\d.,]+)
+            Qtde\.\s*:\s*(?P<quantity>[\d.,]+)
             \s*
             UN:\s*(?P<unit>\S+)
             \s*
