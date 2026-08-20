@@ -260,68 +260,63 @@ class NFCePdfParser:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def extract_totals(page: fitz.Page) -> dict:
-        """
-        Extracts total values based on the vertical alignment between
-        labels and values.
+def extract_totals(page: fitz.Page) -> dict:
+    """
+    Extracts the totals from the invoice.
 
-        Example from the PDF:
+    The PDF text layer may split labels such as
+    "Valor total R$:" into multiple words, so labels are
+    reconstructed from the words belonging to the same visual line.
+    """
 
-            Qtd. total de itens:       10
-            Valor total R$:            129,29
-            Descontos R$:              16,57
-            Valor a pagar R$:          112,72
-        """
+    words = page.get_text("words")
+    lines = NFCePdfParser._group_words_by_line(words)
 
-        words = page.get_text("words")
+    label_patterns = {
+        "total_items": re.compile(
+            r"^Qtd\.\s*total\s*de\s*itens:\s*$",
+            re.IGNORECASE,
+        ),
+        "total_amount": re.compile(
+            r"^Valor\s*total\s*R\$:\s*$",
+            re.IGNORECASE,
+        ),
+        "discount": re.compile(
+            r"^Descontos\s*R\$:\s*$",
+            re.IGNORECASE,
+        ),
+        "amount_to_pay": re.compile(
+            r"^Valor\s*a\s*pagar\s*R\$:\s*$",
+            re.IGNORECASE,
+        ),
+    }
 
-        labels = {
-            "total_items": "Qtd. total de itens:",
-            "total_amount": "Valor total R$:",
-            "discount": "Descontos R$:",
-            "amount_to_pay": "Valor a pagar R$:",
-        }
+    values = {}
 
-        label_positions = {}
+    for line in lines:
+        line_text = " ".join(
+            word["text"]
+            for word in line
+        )
 
-        for word in words:
-            x0, y0, x1, y1, text, *_ = word
+        line_text = re.sub(
+            r"\s+",
+            " ",
+            line_text,
+        ).strip()
 
-            if text in {
-                "Qtd.",
-                "Valor",
-                "Descontos",
-            }:
+        for key, pattern in label_patterns.items():
+            if not pattern.match(line_text):
                 continue
 
-            # Nothing here; labels are handled by matching their
-            # complete line below.
-            _ = (x0, y0, x1, y1, text)
-
-        # Reconstruct words into lines.
-        lines = NFCePdfParser._group_words_by_line(words)
-
-        for line in lines:
-            line_text = " ".join(
-                word["text"]
-                for word in line
-            )
-
-            for key, label in labels.items():
-                if line_text == label:
-                    label_positions[key] = line
-
-        values = {}
-
-        for key, label_line in label_positions.items():
             label_right = max(
                 word["x1"]
-                for word in label_line
+                for word in line
             )
 
             label_y = min(
                 word["y0"]
-                for word in label_line
+                for word in line
             )
 
             candidates = []
@@ -329,10 +324,12 @@ class NFCePdfParser:
             for word in words:
                 x0, y0, x1, y1, text, *_ = word
 
+                # Value must be to the right of the label.
                 if x0 <= label_right:
                     continue
 
-                if abs(y0 - label_y) > 2:
+                # Value must be on the same visual line.
+                if abs(y0 - label_y) > 3:
                     continue
 
                 if not NFCePdfParser._is_decimal(text):
@@ -347,36 +344,37 @@ class NFCePdfParser:
 
                 values[key] = candidates[0][4]
 
-        required = {
-            "total_items",
-            "total_amount",
-            "discount",
-            "amount_to_pay",
-        }
+            break
 
-        missing = required - values.keys()
+    required = {
+        "total_items",
+        "total_amount",
+        "discount",
+        "amount_to_pay",
+    }
 
-        if missing:
-            raise ValueError(
-                "Não foi possível extrair os totais: "
-                + ", ".join(sorted(missing))
-            )
+    missing = required - values.keys()
 
-        return {
-            "total_items": int(
-                values["total_items"]
-            ),
-            "total_amount": NFCePdfParser._parse_decimal(
-                values["total_amount"]
-            ),
-            "discount": NFCePdfParser._parse_decimal(
-                values["discount"]
-            ),
-            "amount_to_pay": NFCePdfParser._parse_decimal(
-                values["amount_to_pay"]
-            ),
-        }
+    if missing:
+        raise ValueError(
+            "Não foi possível extrair os totais: "
+            + ", ".join(sorted(missing))
+        )
 
+    return {
+        "total_items": int(
+            values["total_items"]
+        ),
+        "total_amount": NFCePdfParser._parse_decimal(
+            values["total_amount"]
+        ),
+        "discount": NFCePdfParser._parse_decimal(
+            values["discount"]
+        ),
+        "amount_to_pay": NFCePdfParser._parse_decimal(
+            values["amount_to_pay"]
+        ),
+    }
     # ------------------------------------------------------------------
     # Metadata - Payment
     # ------------------------------------------------------------------
@@ -515,8 +513,6 @@ class NFCePdfParser:
 
         for line in lines:
             line.sort(key=lambda word: word["x0"])
-
-        return lines
 
     # ------------------------------------------------------------------
     # Public API
