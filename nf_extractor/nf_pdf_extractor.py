@@ -20,7 +20,7 @@ class NFCePdfParser:
     # ------------------------------------------------------------------
 
     def _get_page(self) -> fitz.Page:
-        document = fitz.open(self.pdf_path)
+        document = self._open_document()
 
         if not document.page_count:
             document.close()
@@ -33,7 +33,7 @@ class NFCePdfParser:
         return page
 
     def _extract_text(self) -> str:
-        document = fitz.open(self.pdf_path)
+        document = self._open_document()
 
         try:
             if not document.page_count:
@@ -334,7 +334,7 @@ class NFCePdfParser:
         return self.extract_products(text)
 
     def get_metadata(self) -> dict:
-        document = fitz.open(self.pdf_path)
+        document = self._open_document()
 
         try:
             if not document.page_count:
@@ -356,7 +356,7 @@ class NFCePdfParser:
             document.close()
 
     def get_data(self) -> dict:
-        document = fitz.open(self.pdf_path)
+        document = self._open_document()
 
         try:
             if not document.page_count:
