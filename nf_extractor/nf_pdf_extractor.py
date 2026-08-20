@@ -1,6 +1,6 @@
 import re
-from decimal import Decimal
 from datetime import datetime
+from decimal import Decimal
 
 import fitz
 
@@ -9,35 +9,24 @@ class NFCePdfParser:
     def __init__(self, pdf_content: bytes | bytearray):
         self.pdf_content = pdf_content
 
-    def _open_document(self):
-        return fitz.open(
-            stream=self.pdf_content,
-            filetype="pdf",
-        )
-
     # ------------------------------------------------------------------
     # PDF
     # ------------------------------------------------------------------
 
-    def _get_page(self) -> fitz.Page:
-        document = self._open_document()
-
-        if not document.page_count:
-            document.close()
-            raise ValueError("O PDF não possui páginas.")
-
-        page = document[0]
-
-        # Mantém o documento aberto enquanto a página é utilizada.
-        # O documento será fechado pelo caller através de _extract_text.
-        return page
+    def _open_document(self) -> fitz.Document:
+        return fitz.open(
+            stream=self.pdf_content,
+            filetype="pdf",
+        )
 
     def _extract_text(self) -> str:
         document = self._open_document()
 
         try:
             if not document.page_count:
-                raise ValueError("O PDF não possui páginas.")
+                raise ValueError(
+                    "O PDF não possui páginas."
+                )
 
             return document[0].get_text("text")
 
@@ -55,7 +44,7 @@ class NFCePdfParser:
             (?P<name>.+?)
             \s*\(Código:\s*(?P<code>\d+)\s*\)
             \s*
-            Qtde\.(?P<quantity>[\d.,]+)
+            Qtde\.\s*(?P<quantity>[\d.,]+)
             \s*
             UN:\s*(?P<unit>\S+)
             \s*
@@ -91,25 +80,32 @@ class NFCePdfParser:
         return products
 
     # ------------------------------------------------------------------
-    # Metadata
+    # Metadata - Store
     # ------------------------------------------------------------------
 
     @staticmethod
     def extract_store(text: str) -> dict:
+        """
+        Extracts store information from the block:
+
+        STORE NAME
+        CNPJ: XX.XXX.XXX/XXXX-XX
+        STREET, NUMBER, ..., NEIGHBORHOOD,
+        CITY, STATE
+        """
+
         match = re.search(
             r"""
-            (?P<name>.+?)
-            \s*
+            ^(?P<name>[^\n]+)
+            \n
             CNPJ:\s*(?P<cnpj>[\d./-]+)
-            \s*
-            (?P<address>.+?)
-            \s*
-            (?P<city>[A-ZÀ-Ú\s]+)\s*,\s*(?P<state>[A-Z]{2})
-            \s*
-            BOLO
+            \n
+            (?P<address>[^\n]+)
+            \n
+            (?P<city>[^\n]+)
             """,
             text,
-            re.VERBOSE | re.DOTALL,
+            re.MULTILINE | re.VERBOSE,
         )
 
         if not match:
@@ -117,15 +113,32 @@ class NFCePdfParser:
                 "Não foi possível identificar os dados da loja."
             )
 
+        name = match.group("name").strip()
+        cnpj = match.group("cnpj").strip()
         address = match.group("address").strip()
 
+        city_line = match.group("city").strip()
+
+        city_match = re.match(
+            r"(?P<city>.+?)\s*,\s*(?P<state>[A-Z]{2})$",
+            city_line,
+        )
+
+        if not city_match:
+            raise ValueError(
+                "Não foi possível identificar cidade e estado."
+            )
+
+        city = city_match.group("city")
+        state = city_match.group("state")
+
         return {
-            "name": match.group("name").strip(),
-            "cnpj": match.group("cnpj"),
+            "name": name,
+            "cnpj": cnpj,
             "address": NFCePdfParser._extract_address(
                 address,
-                match.group("city"),
-                match.group("state"),
+                city,
+                state,
             ),
         }
 
@@ -135,26 +148,22 @@ class NFCePdfParser:
         city: str,
         state: str,
     ) -> dict:
-        address = re.sub(r"\s+", " ", address).strip()
+        """
+        Parses an address such as:
+
+        AVENIDA GOVERNADOR ORESTES QUERCIA , 155 , ,
+        JD MARAJOARA ,
+        """
 
         parts = [
             part.strip()
             for part in address.split(",")
-        ]
-
-        parts = [
-            part
-            for part in parts
-            if part
+            if part.strip()
         ]
 
         street = parts[0] if parts else None
         number = parts[1] if len(parts) > 1 else None
-        neighborhood = (
-            parts[-1]
-            if len(parts) > 2
-            else None
-        )
+        neighborhood = parts[-1] if len(parts) > 2 else None
 
         return {
             "street": street,
@@ -163,6 +172,10 @@ class NFCePdfParser:
             "city": city.strip(),
             "state": state.strip(),
         }
+
+    # ------------------------------------------------------------------
+    # Metadata - Document
+    # ------------------------------------------------------------------
 
     @staticmethod
     def extract_document_data(text: str) -> dict:
@@ -183,13 +196,12 @@ class NFCePdfParser:
         )
 
         protocol_match = re.search(
-            r"Protocolo de Autorização:\s*"
-            r"(\d+)",
+            r"Protocolo de Autorização:\s*(\d+)",
             text,
         )
 
         access_key_match = re.search(
-            r"Chave de acesso:\s*"
+            r"Chave de acesso:\s*\n?"
             r"([\d\s]{44,})",
             text,
         )
@@ -225,6 +237,11 @@ class NFCePdfParser:
             access_key_match.group(1),
         )
 
+        if len(access_key) != 44:
+            raise ValueError(
+                "Chave de acesso inválida."
+            )
+
         return {
             "number": number_match.group(1),
             "series": series_match.group(1),
@@ -239,34 +256,111 @@ class NFCePdfParser:
         }
 
     # ------------------------------------------------------------------
-    # Totals
+    # Metadata - Totals
     # ------------------------------------------------------------------
 
     @staticmethod
     def extract_totals(page: fitz.Page) -> dict:
+        """
+        Extracts total values based on the vertical alignment between
+        labels and values.
+
+        Example from the PDF:
+
+            Qtd. total de itens:       10
+            Valor total R$:            129,29
+            Descontos R$:              16,57
+            Valor a pagar R$:          112,72
+        """
+
         words = page.get_text("words")
 
-        values = {}
+        labels = {
+            "total_items": "Qtd. total de itens:",
+            "total_amount": "Valor total R$:",
+            "discount": "Descontos R$:",
+            "amount_to_pay": "Valor a pagar R$:",
+        }
+
+        label_positions = {}
 
         for word in words:
             x0, y0, x1, y1, text, *_ = word
 
-            # Os valores ficam na coluna direita da tabela
-            # de totais.
-            if x0 < 400:
+            if text in {
+                "Qtd.",
+                "Valor",
+                "Descontos",
+            }:
                 continue
 
-            if 345 <= y0 < 360:
-                values["total_items"] = text
+            # Nothing here; labels are handled by matching their
+            # complete line below.
+            _ = (x0, y0, x1, y1, text)
 
-            elif 360 <= y0 < 374:
-                values["total_amount"] = text
+        # Reconstruct words into lines.
+        lines = NFCePdfParser._group_words_by_line(words)
 
-            elif 374 <= y0 < 386:
-                values["discount"] = text
+        for line in lines:
+            line_text = " ".join(
+                word["text"]
+                for word in line
+            )
 
-            elif 386 <= y0 < 403:
-                values["amount_to_pay"] = text
+            for key, label in labels.items():
+                if line_text == label:
+                    label_positions[key] = line
+
+        values = {}
+
+        for key, label_line in label_positions.items():
+            label_right = max(
+                word["x1"]
+                for word in label_line
+            )
+
+            label_y = min(
+                word["y0"]
+                for word in label_line
+            )
+
+            candidates = []
+
+            for word in words:
+                x0, y0, x1, y1, text, *_ = word
+
+                if x0 <= label_right:
+                    continue
+
+                if abs(y0 - label_y) > 2:
+                    continue
+
+                if not NFCePdfParser._is_decimal(text):
+                    continue
+
+                candidates.append(word)
+
+            if candidates:
+                candidates.sort(
+                    key=lambda word: word[0]
+                )
+
+                values[key] = candidates[0][4]
+
+        required = {
+            "total_items",
+            "total_amount",
+            "discount",
+            "amount_to_pay",
+        }
+
+        missing = required - values.keys()
+
+        if missing:
+            raise ValueError(
+                "Não foi possível extrair os totais: "
+                + ", ".join(sorted(missing))
+            )
 
         return {
             "total_items": int(
@@ -284,45 +378,145 @@ class NFCePdfParser:
         }
 
     # ------------------------------------------------------------------
-    # Payment
+    # Metadata - Payment
     # ------------------------------------------------------------------
 
     @staticmethod
     def extract_payment(page: fitz.Page) -> dict:
+        """
+        Extracts payment information from the payment section.
+        """
+
         words = page.get_text("words")
+        lines = NFCePdfParser._group_words_by_line(words)
 
-        method = None
-        amount_paid = None
+        payment_line_index = None
 
-        for word in words:
-            x0, y0, x1, y1, text, *_ = word
+        for index, line in enumerate(lines):
+            line_text = " ".join(
+                word["text"]
+                for word in line
+            )
 
-            if 415 <= y0 < 427:
-                if text not in ("Dinheiro",):
-                    continue
-
-                method = text
-
+            if line_text == "Forma de pagamento:":
+                payment_line_index = index
                 break
 
-        for word in words:
-            x0, y0, x1, y1, text, *_ = word
+        if payment_line_index is None:
+            raise ValueError(
+                "Forma de pagamento não encontrada."
+            )
 
-            if (
-                x0 > 400
-                and 415 <= y0 < 427
-                and NFCePdfParser._is_decimal(text)
-            ):
+        if payment_line_index + 1 >= len(lines):
+            raise ValueError(
+                "Método de pagamento não encontrado."
+            )
+
+        payment_line = lines[payment_line_index + 1]
+
+        method = " ".join(
+            word["text"]
+            for word in payment_line
+        )
+
+        amount_paid = None
+
+        # The amount paid appears in the next numeric block.
+        for index in range(
+            payment_line_index + 2,
+            min(payment_line_index + 4, len(lines)),
+        ):
+            line = lines[index]
+
+            line_text = " ".join(
+                word["text"]
+                for word in line
+            )
+
+            if NFCePdfParser._is_decimal(line_text):
                 amount_paid = NFCePdfParser._parse_decimal(
-                    text
+                    line_text
                 )
-
                 break
 
         return {
             "method": method,
             "amount_paid": amount_paid,
         }
+
+    # ------------------------------------------------------------------
+    # Helpers - PDF lines
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _group_words_by_line(
+        words: list[tuple],
+        tolerance: float = 2.0,
+    ) -> list[list[dict]]:
+        """
+        Groups PyMuPDF words into visual lines based on their y
+        coordinates.
+        """
+
+        sorted_words = sorted(
+            words,
+            key=lambda word: (
+                word[1],
+                word[0],
+            ),
+        )
+
+        lines = []
+
+        for word in sorted_words:
+            x0, y0, x1, y1, text, *_ = word
+
+            if not lines:
+                lines.append([])
+
+            current_line = lines[-1]
+
+            if not current_line:
+                current_line.append(
+                    {
+                        "x0": x0,
+                        "y0": y0,
+                        "x1": x1,
+                        "y1": y1,
+                        "text": text,
+                    }
+                )
+                continue
+
+            reference_y = current_line[0]["y0"]
+
+            if abs(y0 - reference_y) <= tolerance:
+                current_line.append(
+                    {
+                        "x0": x0,
+                        "y0": y0,
+                        "x1": x1,
+                        "y1": y1,
+                        "text": text,
+                    }
+                )
+            else:
+                lines.append(
+                    [
+                        {
+                            "x0": x0,
+                            "y0": y0,
+                            "x1": x1,
+                            "y1": y1,
+                            "text": text,
+                        }
+                    ]
+                )
+
+        for line in lines:
+            line.sort(key=lambda word: word["x0"])
+
+        return lines
 
     # ------------------------------------------------------------------
     # Public API
@@ -381,7 +575,7 @@ class NFCePdfParser:
             document.close()
 
     # ------------------------------------------------------------------
-    # Helpers
+    # Helpers - Values
     # ------------------------------------------------------------------
 
     @staticmethod
