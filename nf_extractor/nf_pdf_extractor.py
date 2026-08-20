@@ -488,6 +488,8 @@ class NFCePdfParser:
         for line in lines:
             line.sort(key=lambda word: word["x0"])
 
+        return lines
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
