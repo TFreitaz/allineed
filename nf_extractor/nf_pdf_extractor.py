@@ -260,33 +260,41 @@ class NFCePdfParser:
     # ------------------------------------------------------------------
 
     @staticmethod
-def extract_totals(page: fitz.Page) -> dict:
+    def extract_totals(page: fitz.Page) -> dict:
     """
-    Extracts the totals from the invoice.
+    Extracts invoice totals from the PDF text.
 
-    The PDF text layer may split labels such as
-    "Valor total R$:" into multiple words, so labels are
-    reconstructed from the words belonging to the same visual line.
+    The labels and their values are located on the same visual line,
+    for example:
+
+        Qtd. total de itens: 10
+        Valor total R$: 129,29
+        Descontos R$: 16,57
+        Valor a pagar R$: 112,72
     """
 
     words = page.get_text("words")
     lines = NFCePdfParser._group_words_by_line(words)
 
-    label_patterns = {
+    patterns = {
         "total_items": re.compile(
-            r"^Qtd\.\s*total\s*de\s*itens:\s*$",
+            r"^Qtd\.\s*total\s*de\s*itens:\s*"
+            r"(?P<value>\d+)\s*$",
             re.IGNORECASE,
         ),
         "total_amount": re.compile(
-            r"^Valor\s*total\s*R\$:\s*$",
+            r"^Valor\s*total\s*R\$:\s*"
+            r"(?P<value>[\d.,]+)\s*$",
             re.IGNORECASE,
         ),
         "discount": re.compile(
-            r"^Descontos\s*R\$:\s*$",
+            r"^Descontos\s*R\$:\s*"
+            r"(?P<value>[\d.,]+)\s*$",
             re.IGNORECASE,
         ),
         "amount_to_pay": re.compile(
-            r"^Valor\s*a\s*pagar\s*R\$:\s*$",
+            r"^Valor\s*a\s*pagar\s*R\$:\s*"
+            r"(?P<value>[\d.,]+)\s*$",
             re.IGNORECASE,
         ),
     }
@@ -305,46 +313,12 @@ def extract_totals(page: fitz.Page) -> dict:
             line_text,
         ).strip()
 
-        for key, pattern in label_patterns.items():
-            if not pattern.match(line_text):
-                continue
+        for key, pattern in patterns.items():
+            match = pattern.match(line_text)
 
-            label_right = max(
-                word["x1"]
-                for word in line
-            )
-
-            label_y = min(
-                word["y0"]
-                for word in line
-            )
-
-            candidates = []
-
-            for word in words:
-                x0, y0, x1, y1, text, *_ = word
-
-                # Value must be to the right of the label.
-                if x0 <= label_right:
-                    continue
-
-                # Value must be on the same visual line.
-                if abs(y0 - label_y) > 3:
-                    continue
-
-                if not NFCePdfParser._is_decimal(text):
-                    continue
-
-                candidates.append(word)
-
-            if candidates:
-                candidates.sort(
-                    key=lambda word: word[0]
-                )
-
-                values[key] = candidates[0][4]
-
-            break
+            if match:
+                values[key] = match.group("value")
+                break
 
     required = {
         "total_items",
