@@ -356,7 +356,7 @@ class NFCePdfParser:
     @staticmethod
     def extract_payment(page: fitz.Page) -> dict:
         """
-        Extracts payment method and paid amount from the payment section.
+        Extracts payment method and paid amount.
 
         The PDF contains two columns:
 
@@ -364,69 +364,83 @@ class NFCePdfParser:
             Dinheiro                   112,72
             Troco                      NaN
 
-        Therefore, payment method and amount are extracted independently
-        based on their horizontal position.
+        The payment amount is positioned before the final "R$:"
+        label word, so the complete label position must be considered.
         """
 
         words = page.get_text("words")
 
-        payment_label = None
-        amount_label = None
+        payment_label_words = []
+        amount_label_words = []
+
+        # --------------------------------------------------------------
+        # Find labels
+        # --------------------------------------------------------------
 
         for word in words:
             x0, y0, x1, y1, text, *_ = word
 
-            if text == "pagamento:":
-                # "Forma de pagamento:" is composed of three words.
-                previous_words = [
+            if text == "Forma":
+                candidates = [
                     candidate
                     for candidate in words
                     if (
                         abs(candidate[1] - y0) <= 2
-                        and candidate[0] < x0
+                        and candidate[0] >= x0
+                        and candidate[0] < x1 + 100
                     )
                 ]
 
-                previous_words.sort(
+                candidates.sort(
                     key=lambda candidate: candidate[0]
                 )
 
-                previous_text = " ".join(
+                candidate_text = " ".join(
                     candidate[4]
-                    for candidate in previous_words[-2:]
+                    for candidate in candidates
                 )
 
-                if previous_text == "Forma de":
-                    payment_label = word
+                if candidate_text.startswith(
+                    "Forma de pagamento:"
+                ):
+                    payment_label_words = candidates[:3]
+                    break
 
-            elif text == "R$:":
-                previous_words = [
-                    candidate
-                    for candidate in words
-                    if (
-                        abs(candidate[1] - y0) <= 2
-                        and candidate[0] < x0
-                    )
-                ]
+        for word in words:
+            x0, y0, x1, y1, text, *_ = word
 
-                previous_words.sort(
-                    key=lambda candidate: candidate[0]
+            if text != "Valor":
+                continue
+
+            candidates = [
+                candidate
+                for candidate in words
+                if (
+                    abs(candidate[1] - y0) <= 2
+                    and candidate[0] >= x0
+                    and candidate[0] < x0 + 100
                 )
+            ]
 
-                previous_text = " ".join(
-                    candidate[4]
-                    for candidate in previous_words[-2:]
-                )
+            candidates.sort(
+                key=lambda candidate: candidate[0]
+            )
 
-                if previous_text == "Valor pago":
-                    amount_label = word
+            candidate_text = " ".join(
+                candidate[4]
+                for candidate in candidates
+            )
 
-        if payment_label is None:
+            if candidate_text.startswith("Valor pago R$:"):
+                amount_label_words = candidates[:3]
+                break
+
+        if not payment_label_words:
             raise ValueError(
                 "Forma de pagamento não encontrada."
             )
 
-        if amount_label is None:
+        if not amount_label_words:
             raise ValueError(
                 "Valor pago não encontrado."
             )
@@ -435,20 +449,36 @@ class NFCePdfParser:
         # Payment method
         # --------------------------------------------------------------
 
+        payment_label_x0 = min(
+            word[0]
+            for word in payment_label_words
+        )
+
+        payment_label_x1 = max(
+            word[2]
+            for word in payment_label_words
+        )
+
+        payment_label_y1 = max(
+            word[3]
+            for word in payment_label_words
+        )
+
         method_candidates = []
 
         for word in words:
             x0, y0, x1, y1, text, *_ = word
 
-            if y0 <= payment_label[3]:
+            if y0 <= payment_label_y1:
                 continue
 
-            # The payment method is directly below the label.
-            if y0 - payment_label[3] > 15:
+            if y0 - payment_label_y1 > 15:
                 continue
 
-            # Keep it in the same column.
-            if x1 > payment_label[2] + 5:
+            if x0 < payment_label_x0:
+                continue
+
+            if x1 > payment_label_x1 + 5:
                 continue
 
             if NFCePdfParser._is_decimal(text):
@@ -477,19 +507,30 @@ class NFCePdfParser:
         # Amount paid
         # --------------------------------------------------------------
 
+        amount_label_x0 = min(
+            word[0]
+            for word in amount_label_words
+        )
+
+        amount_label_y1 = max(
+            word[3]
+            for word in amount_label_words
+        )
+
         amount_candidates = []
 
         for word in words:
             x0, y0, x1, y1, text, *_ = word
 
-            if y0 <= amount_label[3]:
+            if y0 <= amount_label_y1:
                 continue
 
-            if y0 - amount_label[3] > 15:
+            if y0 - amount_label_y1 > 15:
                 continue
 
-            # Must be to the right of "Valor pago R$:"
-            if x0 < amount_label[0]:
+            # The value must be below the complete
+            # "Valor pago R$:" label.
+            if x0 < amount_label_x0:
                 continue
 
             if not NFCePdfParser._is_decimal(text):
