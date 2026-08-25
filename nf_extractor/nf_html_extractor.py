@@ -1,9 +1,13 @@
 import re
+import logging
 from decimal import Decimal
 from datetime import datetime
 
 import requests
 from bs4 import BeautifulSoup
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("telegram-echo-bot")
 
 
 class NFCeHtmlParser:
@@ -262,7 +266,12 @@ class NFCeHtmlParser:
     def is_document_not_found(soup: BeautifulSoup) -> bool:
         text = soup.get_text(" ", strip=True).lower()
 
-        return "documento fiscal inexistente" in text
+        not_found = "documento fiscal inexistente" in text
+
+        if not_found:
+            logger.info("The NFC-e URL returned a broken document.")
+
+        return not_found
 
     # ------------------------------------------------------------------
     # Public API
