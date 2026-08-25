@@ -318,6 +318,9 @@ class NFCeHtmlParser:
             return
 
         soup = self.parse_html(html)
+        if self.is_document_not_found(soup):
+            return {"error": "Document not found"}
+
         lines = self.extract_lines(soup)
 
         start = self.find_products_start(lines)

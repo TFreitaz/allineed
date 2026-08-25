@@ -381,6 +381,10 @@ class MsgReader:
         """
         Formata os dados extraídos da NFC-e em uma resposta legível.
         """
+        if error in data:
+            if data["error"] == "Document not found":
+                return "Documento Fiscal (NFC-e) Inexistente na Base de Dados da Sefaz."
+
         metadata = data.get("metadata", {})
         products = data.get("products", [])
 
