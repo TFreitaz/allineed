@@ -258,6 +258,12 @@ class NFCeHtmlParser:
             ),
         }
 
+    @staticmethod
+    def is_document_not_found(soup: BeautifulSoup) -> bool:
+        text = soup.get_text(" ", strip=True).lower()
+
+        return "documento fiscal inexistente" in text
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -265,6 +271,10 @@ class NFCeHtmlParser:
     def get_products(self) -> list[dict]:
         html = self.fetch_page()
         soup = self.parse_html(html)
+
+        if self.is_document_not_found(soup):
+            return []
+
         lines = self.extract_lines(soup)
 
         start = self.find_products_start(lines)
@@ -279,6 +289,10 @@ class NFCeHtmlParser:
     def get_metadata(self) -> dict:
         html = self.fetch_page()
         soup = self.parse_html(html)
+
+        if self.is_document_not_found(soup):
+            return []
+
         lines = self.extract_lines(soup)
 
         return self.extract_metadata(lines)

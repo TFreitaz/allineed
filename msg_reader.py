@@ -151,6 +151,13 @@ class MsgReader:
         if is_report:
             return self.answer_stock_estimator()
 
+        if self.text.startswith("/update_catalog"):
+            logger.info(
+                "Report command check: matched=%s",
+                is_report,
+            )
+            return self.answer_catalog_report()
+
         # ------------------------------------------------------------------
         # NFC-e URL
         # ------------------------------------------------------------------
@@ -178,11 +185,19 @@ class MsgReader:
             "Message type not recognized."
         )
 
-        return (
+        return self.construct_answer(
             "Não entendi essa mensagem. "
             "Me envie um link de NFC-e ou uma foto "
             "do QR code da nota."
         )
+
+    def construct_answer(self, text=None):
+        return {
+            "text": text
+        }
+
+    def answer_catalog_report(self):
+        ...
 
     def _is_nfe_url(self, text: str) -> bool:
         try:
@@ -368,6 +383,9 @@ class MsgReader:
         """
         metadata = data.get("metadata", {})
         products = data.get("products", [])
+
+        if not metadata and not products:
+            return "Não foi possível extrair informações da página solicitada."
 
         response_lines = [
             "Compras registradas!",
