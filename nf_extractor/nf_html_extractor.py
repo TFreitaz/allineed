@@ -270,7 +270,8 @@ class NFCeHtmlParser:
 
         if not_found:
             logger.info("The NFC-e URL returned a broken document.")
-        logger.info("The NFC-e URL returned a valid document.")
+        else:
+            logger.info("The NFC-e URL returned a valid document.")
 
         return not_found
 

@@ -373,6 +373,13 @@ class MsgReader:
                 "baixe o PDF da compra e me envie."
             )
 
+        if "error" in data:
+            return (
+                "A URL enviada retornou um documento inválido.\n"
+                "Se conseguir acessar a NFC-e, baixe seu PDF e me envie."
+            )
+
+
         save_purchase(user_id=self.user_id, data=data, source_message_id=self.message_id)
 
         return self.format_nfe_link_response(data)
