@@ -266,10 +266,11 @@ class NFCeHtmlParser:
     def is_document_not_found(soup: BeautifulSoup) -> bool:
         text = soup.get_text(" ", strip=True).lower()
 
-        not_found = "documento fiscal (nfc-e) inexistente" in text
+        not_found = "seu navegador não da suporte a javascript. por favor atualize-o" in text
 
         if not_found:
             logger.info("The NFC-e URL returned a broken document.")
+        logger.info("The NFC-e URL returned a valid document.")
 
         return not_found
 
