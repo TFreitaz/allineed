@@ -373,14 +373,8 @@ class MsgReader:
                 "baixe o PDF da compra e me envie."
             )
 
-        if "error" in data:
-            return (
-                "A URL enviada retornou um documento inválido.\n"
-                "Se conseguir acessar a NFC-e, baixe seu PDF e me envie."
-            )
-
-
-        save_purchase(user_id=self.user_id, data=data, source_message_id=self.message_id)
+        if data.get("metadata") and data.get("products"):
+            save_purchase(user_id=self.user_id, data=data, source_message_id=self.message_id)
 
         return self.format_nfe_link_response(data)
 
@@ -388,7 +382,7 @@ class MsgReader:
         """
         Formata os dados extraídos da NFC-e em uma resposta legível.
         """
-        if error in data:
+        if "error" in data:
             if data["error"] == "Document not found":
                 return "Documento Fiscal (NFC-e) Inexistente na Base de Dados da Sefaz."
 
